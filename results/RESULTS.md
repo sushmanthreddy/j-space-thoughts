@@ -2,7 +2,7 @@
 
 ## Current verdict
 
-**G-ALPHA FAILED; STAGE 2 AND STAGE 3 SKIPPED.** No frozen intervention passed all calibration requirements. The allowed conclusion is a calibration/READ-positive-control limitation, not a verdict on the Written-vs-Read hypothesis.
+**G-ALPHA FAILED; STAGE 2 AND STAGE 3 SKIPPED.** Stage 4 is required. This is a calibration limitation, not a hypothesis verdict.
 
 ## Environment
 
@@ -121,3 +121,17 @@ The full 24-row random and absent-control sweep is stored at
 exploratory carrying-position rescue also failed G-POS, so making it selectable
 would not alter the decision. Stage 2 and Stage 3 are skipped; the workflow
 takes the calibration-limitation fallback without a hypothesis verdict.
+
+## Stage 2 — recalibration at alpha*
+
+**SKIPPED_PREREQUISITE.** No alpha* exists, so no alpha*-specific recalibration is defined. No model forward was run in notebook
+04. The following alpha*-specific checks therefore remain unmeasured:
+
+- G-SWAP at alpha*: **NOT_EVALUATED_NO_ALPHA**
+- G-DIR at alpha*: **NOT_EVALUATED_NO_ALPHA**
+- capability at alpha*: **NOT_EVALUATED_NO_ALPHA**
+- G-POS at alpha*: **NOT_EVALUATED_NO_ALPHA**
+- weight-READ validation at alpha*: **NOT_EVALUATED_NO_ALPHA**
+
+Stage-0 G-DIR re-verification is retained as an instrument sentinel, but it is
+not relabeled as a Stage-2 result at a nonexistent alpha*.
