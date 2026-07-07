@@ -122,8 +122,8 @@ lacked clean continuation capability. These ratios are fixed-mask properties,
 so tuning alpha cannot repair that subgate.
 
 Capability delta NLL was exactly zero for the masked policies only because
-**{observation['capability']['empty_masks']}/
-{observation['capability']['total_masks']}** unrelated-text masks were empty.
+**{observation['capability']['empty_masks']}/{observation['capability']['total_masks']}**
+unrelated-text masks were empty.
 This is evidence that the detector did not fire on that fixed bank, not an
 active-edit capability stress test. The all-position reference did actively
 edit those texts; at alpha=2 its signed mean delta NLL was
@@ -313,7 +313,7 @@ def build_stage4_payload(metrics: Mapping[str, Any]) -> dict[str, Any]:
                     not row["positions"] for row in capability_masks.values()
                 ),
                 "total_masks": len(capability_masks),
-                "interpretation": "PASS_NO_EDIT_OPPORTUNITY",
+                "interpretation": "NO_EDIT_OPPORTUNITY",
             },
             "all_position_alpha_2": {
                 "mean_delta_nll": all_position_2["capability"][

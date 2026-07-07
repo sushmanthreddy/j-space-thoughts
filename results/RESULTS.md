@@ -2,7 +2,7 @@
 
 ## Current verdict
 
-**G-ALPHA FAILED; STAGE 2 AND STAGE 3 SKIPPED.** Stage 4 is required. This is a calibration limitation, not a hypothesis verdict.
+**G-ALPHA FAILED; STAGE 2 AND STAGE 3 SKIPPED.** No frozen intervention passed all calibration requirements. The allowed conclusion is a calibration/READ-positive-control limitation, not a verdict on the Written-vs-Read hypothesis.
 
 ## Environment
 
@@ -41,32 +41,32 @@ The carrying-position fractional swap is reported as an exploratory,
 nonselectable sensitivity analysis because it was not frozen in notebook 00.
 The all-position fractional swap is diagnostic only.
 
-| policy | alpha | swaps | mean delta NLL | mean abs delta NLL | G-POS | random | absent | composite |
-| --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
-| project_out_transfer | 0.25 | 0/3 | +0.000 | 0.000 | 0/8 | FAIL | FAIL | FAIL |
-| project_out_transfer | 0.50 | 0/3 | +0.000 | 0.000 | 0/8 | PASS | PASS | FAIL |
-| project_out_transfer | 0.75 | 0/3 | +0.000 | 0.000 | 0/8 | PASS | FAIL | FAIL |
-| project_out_transfer | 1.00 | 0/3 | +0.000 | 0.000 | 0/8 | PASS | FAIL | FAIL |
-| project_out_transfer | 1.25 | 0/3 | +0.000 | 0.000 | 0/8 | PASS | FAIL | FAIL |
-| project_out_transfer | 1.50 | 2/3 | +0.000 | 0.000 | 0/8 | PASS | FAIL | FAIL |
-| project_out_transfer | 1.75 | 2/3 | +0.000 | 0.000 | 0/8 | PASS | FAIL | FAIL |
-| project_out_transfer | 2.00 | 2/3 | +0.000 | 0.000 | 0/8 | PASS | FAIL | FAIL |
-| fractional_swap_carrying_positions | 0.25 | 0/3 | +0.000 | 0.000 | 0/8 | PASS | FAIL | FAIL |
-| fractional_swap_carrying_positions | 0.50 | 0/3 | +0.000 | 0.000 | 0/8 | PASS | FAIL | FAIL |
-| fractional_swap_carrying_positions | 0.75 | 0/3 | +0.000 | 0.000 | 0/8 | FAIL | FAIL | FAIL |
-| fractional_swap_carrying_positions | 1.00 | 0/3 | +0.000 | 0.000 | 0/8 | PASS | FAIL | FAIL |
-| fractional_swap_carrying_positions | 1.25 | 2/3 | +0.000 | 0.000 | 0/8 | PASS | PASS | FAIL |
-| fractional_swap_carrying_positions | 1.50 | 3/3 | +0.000 | 0.000 | 0/8 | PASS | PASS | FAIL |
-| fractional_swap_carrying_positions | 1.75 | 3/3 | +0.000 | 0.000 | 0/8 | PASS | PASS | FAIL |
-| fractional_swap_carrying_positions | 2.00 | 3/3 | +0.000 | 0.000 | 0/8 | PASS | PASS | FAIL |
-| fractional_swap_all_positions_reference | 0.25 | 0/3 | -0.004 | 0.028 | 0/8 | FAIL | FAIL | FAIL |
-| fractional_swap_all_positions_reference | 0.50 | 0/3 | +0.021 | 0.052 | 0/8 | FAIL | FAIL | FAIL |
-| fractional_swap_all_positions_reference | 0.75 | 0/3 | +0.057 | 0.098 | 0/8 | FAIL | FAIL | FAIL |
-| fractional_swap_all_positions_reference | 1.00 | 1/3 | +0.124 | 0.170 | 1/8 | FAIL | FAIL | FAIL |
-| fractional_swap_all_positions_reference | 1.25 | 2/3 | +0.230 | 0.269 | 1/8 | PASS | PASS | FAIL |
-| fractional_swap_all_positions_reference | 1.50 | 2/3 | +0.344 | 0.385 | 1/8 | PASS | PASS | FAIL |
-| fractional_swap_all_positions_reference | 1.75 | 3/3 | +0.474 | 0.515 | 1/8 | PASS | PASS | FAIL |
-| fractional_swap_all_positions_reference | 2.00 | 3/3 | +0.623 | 0.669 | 1/8 | PASS | PASS | FAIL |
+| policy | alpha | swaps | mean delta NLL | mean abs delta NLL | capability gate | G-POS | random | absent | composite |
+| --- | ---: | ---: | ---: | ---: | --- | ---: | --- | --- | --- |
+| project_out_transfer | 0.25 | 0/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | FAIL | FAIL | FAIL |
+| project_out_transfer | 0.50 | 0/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | PASS | FAIL |
+| project_out_transfer | 0.75 | 0/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | FAIL | FAIL |
+| project_out_transfer | 1.00 | 0/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | FAIL | FAIL |
+| project_out_transfer | 1.25 | 0/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | FAIL | FAIL |
+| project_out_transfer | 1.50 | 2/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | FAIL | FAIL |
+| project_out_transfer | 1.75 | 2/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | FAIL | FAIL |
+| project_out_transfer | 2.00 | 2/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | FAIL | FAIL |
+| fractional_swap_carrying_positions | 0.25 | 0/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | FAIL | FAIL |
+| fractional_swap_carrying_positions | 0.50 | 0/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | FAIL | FAIL |
+| fractional_swap_carrying_positions | 0.75 | 0/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | FAIL | FAIL | FAIL |
+| fractional_swap_carrying_positions | 1.00 | 0/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | FAIL | FAIL |
+| fractional_swap_carrying_positions | 1.25 | 2/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | PASS | FAIL |
+| fractional_swap_carrying_positions | 1.50 | 3/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | PASS | FAIL |
+| fractional_swap_carrying_positions | 1.75 | 3/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | PASS | FAIL |
+| fractional_swap_carrying_positions | 2.00 | 3/3 | +0.000 | 0.000 | NO_EDIT_OPPORTUNITY | 0/8 | PASS | PASS | FAIL |
+| fractional_swap_all_positions_reference | 0.25 | 0/3 | -0.004 | 0.028 | PASS | 0/8 | FAIL | FAIL | FAIL |
+| fractional_swap_all_positions_reference | 0.50 | 0/3 | +0.021 | 0.052 | PASS | 0/8 | FAIL | FAIL | FAIL |
+| fractional_swap_all_positions_reference | 0.75 | 0/3 | +0.057 | 0.098 | PASS | 0/8 | FAIL | FAIL | FAIL |
+| fractional_swap_all_positions_reference | 1.00 | 1/3 | +0.124 | 0.170 | FAIL | 1/8 | FAIL | FAIL | FAIL |
+| fractional_swap_all_positions_reference | 1.25 | 2/3 | +0.230 | 0.269 | FAIL | 1/8 | PASS | PASS | FAIL |
+| fractional_swap_all_positions_reference | 1.50 | 2/3 | +0.344 | 0.385 | FAIL | 1/8 | PASS | PASS | FAIL |
+| fractional_swap_all_positions_reference | 1.75 | 3/3 | +0.474 | 0.515 | FAIL | 1/8 | PASS | PASS | FAIL |
+| fractional_swap_all_positions_reference | 2.00 | 3/3 | +0.623 | 0.669 | FAIL | 1/8 | PASS | PASS | FAIL |
 
 ![F-ALPHA](figures/f_alpha_v3.png)
 
@@ -115,34 +115,9 @@ NLL=0.269 exceeded 0.25 and its per-intervention
 signed means also failed (animal-legs-buffalo2=0.263, chem-photosynthesis-Z=0.074, spider-legs=0.354). It was nonselectable by protocol.
 
 The full 24-row random and absent-control sweep is stored at
-`data/raw/v3/015_alpha_sweep.json` (SHA-256 `a46e047a3f47908bb9d74cc0758aedfb5fcc66505aa676dcfb6f43e258149d67`).
+`data/raw/v3/015_alpha_sweep.json` (SHA-256 `ef53591af7e331607d7fafc43d6f3d08e2687e68197b9e925f7ee1a60e0e0cd5`).
 
 **G-ALPHA FAIL; no tested strength/policy simultaneously achieved 3/3 swaps, capability, G-POS, and both specificity nulls.** The frozen primary policy never exceeded 2/3 swaps. The
 exploratory carrying-position rescue also failed G-POS, so making it selectable
 would not alter the decision. Stage 2 and Stage 3 are skipped; the workflow
 takes the calibration-limitation fallback without a hypothesis verdict.
-
-## Stage 2 — recalibration at alpha*
-
-**SKIPPED_PREREQUISITE.** No alpha* exists, so no alpha*-specific recalibration is defined. No model forward was run in notebook
-04. The following alpha*-specific checks therefore remain unmeasured:
-
-- G-DIR at alpha*: **NOT_EVALUATED_NO_ALPHA**
-- G-POS at alpha*: **NOT_EVALUATED_NO_ALPHA**
-- G-SWAP at alpha*: **NOT_EVALUATED_NO_ALPHA**
-- capability at alpha*: **NOT_EVALUATED_NO_ALPHA**
-- weight-READ validation at alpha*: **NOT_EVALUATED_NO_ALPHA**
-
-Stage-0 G-DIR re-verification is retained as an instrument sentinel, but it is
-not relabeled as a Stage-2 result at a nonexistent alpha*.
-
-## Stage 3 — science prerequisite records
-
-| notebook | preregistered scope | result |
-| --- | --- | --- |
-| 05_science_twohop.ipynb | P1 and P2 | SKIPPED_PREREQUISITE |
-| 06_science_ambiguity.ipynb | P3 | SKIPPED_PREREQUISITE |
-| 07_scale.ipynb | P1 across model scale | SKIPPED_PREREQUISITE |
-
-These notebooks are executed model-free guards. They do not import historical
-science values or treat missing measurements as negative effects.

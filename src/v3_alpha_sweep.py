@@ -751,7 +751,7 @@ def _evaluate_capability(
         )
     grand = float(np.mean(values))
     mean_abs = float(np.mean(np.abs(values)))
-    passed = bool(
+    numeric_pass = bool(
         all(math.isfinite(value) for value in values)
         and abs(grand) < CAPABILITY_THRESHOLD
         and mean_abs < CAPABILITY_THRESHOLD
@@ -761,8 +761,19 @@ def _evaluate_capability(
             for row in per_intervention
         )
     )
+    n_active_edit_opportunities = (
+        len(prepared_rows)
+        if policy == "fractional_swap_all_positions_reference"
+        else sum(bool(row["mask"]["positions"]) for row in prepared_rows)
+    )
+    if n_active_edit_opportunities == 0:
+        status = "NO_EDIT_OPPORTUNITY"
+    else:
+        status = "PASS" if numeric_pass else "FAIL"
     return {
-        "status": "PASS" if passed else "FAIL",
+        "status": status,
+        "numeric_threshold_status": "PASS" if numeric_pass else "FAIL",
+        "n_active_edit_opportunities": n_active_edit_opportunities,
         "threshold": CAPABILITY_THRESHOLD,
         "mean_delta_nll": grand,
         "mean_abs_delta_nll": mean_abs,
@@ -1344,12 +1355,13 @@ def run_alpha_sweep(
 def _report_section(sweep: Mapping[str, Any]) -> str:
     rows = "\n".join(
         "| {policy} | {alpha:.2f} | {swaps}/3 | {nll:+.3f} | {abs_nll:.3f} "
-        "| {gpos}/8 | {random} | {absent} | {valid} |".format(
+        "| {capability} | {gpos}/8 | {random} | {absent} | {valid} |".format(
             policy=row["policy"],
             alpha=row["alpha"],
             swaps=row["known_swaps"]["n_pass"],
             nll=row["capability"]["mean_delta_nll"],
             abs_nll=row["capability"]["mean_abs_delta_nll"],
+            capability=row["capability"]["status"],
             gpos=row["g_pos"]["n_reproduced"],
             random=row["random_null"]["status"],
             absent=row["absent_null"]["status"],
@@ -1427,8 +1439,8 @@ The carrying-position fractional swap is reported as an exploratory,
 nonselectable sensitivity analysis because it was not frozen in notebook 00.
 The all-position fractional swap is diagnostic only.
 
-| policy | alpha | swaps | mean delta NLL | mean abs delta NLL | G-POS | random | absent | composite |
-| --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
+| policy | alpha | swaps | mean delta NLL | mean abs delta NLL | capability gate | G-POS | random | absent | composite |
+| --- | ---: | ---: | ---: | ---: | --- | ---: | --- | --- | --- |
 {rows}
 
 ![F-ALPHA](figures/f_alpha_v3.png)
@@ -1499,7 +1511,7 @@ def _validate_alpha_sweep(sweep: Mapping[str, Any]) -> None:
     controls_fire = sweep["firing_controls"] == "PASS"
     for row in rows:
         capability = row["capability"]
-        capability_pass = bool(
+        numeric_capability_pass = bool(
             math.isfinite(float(capability["mean_delta_nll"]))
             and abs(float(capability["mean_delta_nll"]))
             < CAPABILITY_THRESHOLD
@@ -1512,9 +1524,33 @@ def _validate_alpha_sweep(sweep: Mapping[str, Any]) -> None:
                 for bank in capability["per_intervention"]
             )
         )
+        expected_active_edit_opportunities = (
+            len(capability["rows"])
+            if row["policy"] == "fractional_swap_all_positions_reference"
+            else sum(
+                bool(item["mask"]["positions"])
+                for item in capability["rows"]
+            )
+        )
+        n_active_edit_opportunities = int(
+            capability["n_active_edit_opportunities"]
+        )
+        if n_active_edit_opportunities != expected_active_edit_opportunities:
+            raise RuntimeError("G-ALPHA active capability count does not rederive")
+        expected_capability_status = (
+            "NO_EDIT_OPPORTUNITY"
+            if n_active_edit_opportunities == 0
+            else ("PASS" if numeric_capability_pass else "FAIL")
+        )
+        if (
+            capability["status"] != expected_capability_status
+            or capability["numeric_threshold_status"]
+            != ("PASS" if numeric_capability_pass else "FAIL")
+        ):
+            raise RuntimeError("G-ALPHA capability status does not rederive")
         expected_gates = {
             "swap_3_of_3": row["known_swaps"]["status"] == "PASS",
-            "capability": capability_pass,
+            "capability": capability["status"] == "PASS",
             "g_pos": row["g_pos"]["status"] == "PASS",
             "random_null": row["random_null"]["status"] == "PASS",
             "absent_null": row["absent_null"]["status"] == "PASS",
@@ -1614,6 +1650,9 @@ def persist_alpha_sweep(sweep: Mapping[str, Any]) -> dict[str, Any]:
         v3["gate_ledger"]["stage2_recalibration"] = "SKIPPED_PREREQUISITE"
         v3["gate_ledger"]["stage3_science"] = "SKIPPED_PREREQUISITE"
         v3["gate_ledger"]["stage4_report"] = "REQUIRED"
+        v3.pop("stage2_recalibration", None)
+        v3.pop("stage3_notebooks", None)
+        v3.pop("stage4_fallback", None)
         v3["current_allowed_conclusion"] = (
             "NO_VALID_ALPHA_CALIBRATION_LIMITATION_NO_HYPOTHESIS_INFERENCE"
         )

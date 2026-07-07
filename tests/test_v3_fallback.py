@@ -73,7 +73,7 @@ def test_stage4_payload_preserves_claim_boundary_and_structural_zero():
     assert payload["observations"]["capability"] == {
         "empty_masks": 2,
         "total_masks": 2,
-        "interpretation": "PASS_NO_EDIT_OPPORTUNITY",
+        "interpretation": "NO_EDIT_OPPORTUNITY",
     }
     assert payload["claim_boundary"]["hypothesis_status"] == "NOT_TESTED"
     assert not payload["claim_boundary"]["hypothesis_false_established"]

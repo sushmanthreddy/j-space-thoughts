@@ -78,6 +78,8 @@ def _valid_fail_sweep(raw_path):
                     "known_swaps": {"status": "FAIL"},
                     "capability": {
                         "status": "PASS",
+                        "numeric_threshold_status": "PASS",
+                        "n_active_edit_opportunities": 1,
                         "mean_delta_nll": 0.0,
                         "mean_abs_delta_nll": 0.0,
                         "per_intervention": [
@@ -86,6 +88,7 @@ def _valid_fail_sweep(raw_path):
                                 "mean_abs_delta_nll": 0.0,
                             }
                         ],
+                        "rows": [{"mask": {"positions": [0]}}],
                     },
                     "g_pos": {"status": "FAIL"},
                     "random_null": {
@@ -131,5 +134,13 @@ def test_validate_alpha_sweep_enforces_full_null_coverage_and_mean_absolute(tmp_
     hidden_mean_absolute_failure = copy.deepcopy(sweep)
     capability = hidden_mean_absolute_failure["rows"][0]["capability"]
     capability["mean_abs_delta_nll"] = 0.3
-    with pytest.raises(RuntimeError, match="gate values"):
+    with pytest.raises(RuntimeError, match="capability status"):
         _validate_alpha_sweep(hidden_mean_absolute_failure)
+
+    structural_zero = copy.deepcopy(sweep)
+    capability = structural_zero["rows"][0]["capability"]
+    capability["status"] = "NO_EDIT_OPPORTUNITY"
+    capability["n_active_edit_opportunities"] = 0
+    capability["rows"][0]["mask"]["positions"] = []
+    structural_zero["rows"][0]["gates"]["capability"] = False
+    _validate_alpha_sweep(structural_zero)
