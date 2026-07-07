@@ -6,7 +6,8 @@ import gc
 import os
 import random
 from dataclasses import dataclass
-from typing import Any, Iterable
+from collections.abc import Iterable, Sequence
+from typing import Any
 
 import numpy as np
 import torch
@@ -132,6 +133,72 @@ def decode_topk(tokenizer: Any, logits: torch.Tensor, k: int = 10) -> list[dict]
         }
         for value, token_id in zip(values.cpu(), indices.cpu(), strict=True)
     ]
+
+
+@torch.no_grad()
+def batched_next_token_records(
+    hf_model: torch.nn.Module,
+    tokenizer: Any,
+    prompts: Sequence[str],
+    expected_token_ids: Sequence[int],
+    *,
+    batch_size: int = 8,
+    top_k: int = 10,
+    max_length: int = 128,
+) -> list[dict[str, Any]]:
+    """Rank one predeclared token after each prompt using padded batches."""
+
+    if len(prompts) != len(expected_token_ids) or not prompts:
+        raise ValueError("Prompts and expected token IDs must align and be nonempty")
+    if batch_size < 1 or top_k < 1:
+        raise ValueError("batch_size and top_k must be positive")
+    device = next(hf_model.parameters()).device
+    rows: list[dict[str, Any]] = []
+    for start in range(0, len(prompts), batch_size):
+        prompt_batch = list(prompts[start : start + batch_size])
+        token_batch = [
+            int(value) for value in expected_token_ids[start : start + batch_size]
+        ]
+        encoded = tokenizer(
+            prompt_batch,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+        )
+        input_ids = encoded.input_ids.to(device)
+        attention_mask = encoded.attention_mask.to(device)
+        output = hf_model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            use_cache=False,
+        ).logits
+        for batch_index, (prompt, expected_id) in enumerate(
+            zip(prompt_batch, token_batch, strict=True)
+        ):
+            positions = attention_mask[batch_index].nonzero(as_tuple=False).flatten()
+            position = int(positions[-1])
+            logits = output[batch_index, position].float()
+            rank = int((logits > logits[expected_id]).sum().item() + 1)
+            rows.append(
+                {
+                    "index": start + batch_index,
+                    "prompt": prompt,
+                    "n_tokens": int(len(positions)),
+                    "expected_token_id": expected_id,
+                    "expected_token": tokenizer.decode([expected_id]),
+                    "expected_logit": float(logits[expected_id].cpu()),
+                    "rank": rank,
+                    "top1_correct": int(rank == 1),
+                    "top5_correct": int(rank <= 5),
+                    "top10_correct": int(rank <= 10),
+                    "top_tokens": decode_topk(
+                        tokenizer, logits, min(top_k, logits.numel())
+                    ),
+                }
+            )
+        del output
+    return rows
 
 
 @torch.no_grad()

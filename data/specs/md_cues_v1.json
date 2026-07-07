@@ -1,0 +1,521 @@
+{
+  "schema_version": "md-cues-v1",
+  "seed": 1729,
+  "model": {
+    "id": "Qwen/Qwen2.5-7B-Instruct",
+    "revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+    "tokenizer_use_fast": true
+  },
+  "source": {
+    "repository": "anthropics/jacobian-lens",
+    "commit": "581d398613e5602a5af361e1c34d3a92ea82ba8e",
+    "path": "data/experiments/probe-swap.json",
+    "license": "Apache-2.0"
+  },
+  "selection": {
+    "rule": "Traverse upstream source order; retain items for which Qwen token validation accepts both concept tokens and both behavior tokens, and retain an item only when neither concept has appeared in an earlier retained pair; stop after 20 pairs. No model score or intervention result enters selection.",
+    "n_pairs": 20,
+    "n_unique_concepts": 40,
+    "train_cues_per_concept": 4,
+    "heldout_cues_per_concept": 2
+  },
+  "anchor_suffix": "Keep the answer private and hold it in mind.",
+  "templates": {
+    "train_description": "Silently resolve the entity described below. Do not write its name.\nDescription: {cue}\nKeep the answer private and hold it in mind.",
+    "train_clue": "Infer one concept from this clue without saying it aloud.\nClue: {cue}\nKeep the answer private and hold it in mind.",
+    "train_situation": "Read the situation and identify its central entity internally.\nSituation: {cue}\nKeep the answer private and hold it in mind.",
+    "train_riddle": "Solve this one-concept riddle silently.\nRiddle: {cue}\nKeep the answer private and hold it in mind.",
+    "heldout_new_clue": "Determine the intended entity, but do not output it.\nNew clue: {cue}\nKeep the answer private and hold it in mind.",
+    "heldout_independent": "What single concept is evoked? Think only; do not respond with it.\nIndependent clue: {cue}\nKeep the answer private and hold it in mind."
+  },
+  "audit_policy": {
+    "normalization": "Unicode NFKC followed by casefold",
+    "forbidden_in_each_pair_cue": [
+      "the cue's canonical concept surface",
+      "the paired foil's canonical concept surface",
+      "the pair's target behavior answer surface",
+      "the pair's foil behavior answer surface"
+    ],
+    "behavior_prompt_overlap": "Reject a cue with a contiguous run of 6 or more normalized word tokens shared with any upstream behavior prompt.",
+    "split_hygiene": "cue_id, fact_id, and normalized cue text must be globally unique; train and heldout fact_id sets must be disjoint; heldout cues must use independent facts rather than paraphrases of train cues.",
+    "rendering": "Every concept uses each train template exactly once and each heldout template exactly once. Record the final token of the identical anchor suffix; reject truncation or a non-identical anchor tokenization.",
+    "direction_sign": "Orient only as normalized(train concept mean minus matched leave-pair-out baseline mean). Never flip using heldout labels or J-Lens cosine.",
+    "baseline": "For each train template slot, average all other concepts except the concept and its paired foil; subtract that matched-template mean before averaging slots and normalizing."
+  },
+  "validation_plan": {
+    "workspace_layers": [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25],
+    "fixed_validation_layer": 18,
+    "no_layer_selection_rule": "Layer 18 and the full preregistered band are fixed before heldout scores are inspected.",
+    "sign_check": "At layer 18, at least 80 percent of concepts must have positive heldout concept-minus-leave-pair-out score, and the concept-level bootstrap 95 percent confidence interval for the macro mean must exclude zero. A failed concept is reported and its direction is not flipped.",
+    "heldout_classification": "Using train-only centering and scaling for each direction, report per-prompt 40-way top-1 accuracy, mean reciprocal rank, and macro one-vs-rest AUROC over all 80 heldout cues. Require the top-1 bootstrap 95 percent lower bound above 1/40 chance, AUROC lower bound above 0.5, and a fixed-label permutation p-value below 0.01.",
+    "known_answer_control": "Run separate explicit-answer versions of the 80 heldout cues; their activations never enter direction fitting or validation. Report exact target-token top-1 and top-5 rates; require top-1 at least 0.50 and top-5 at least 0.80.",
+    "silent_output_contamination": "On the 240 silent prompts, report target-token ranks. Require aggregate target top-1 rate at most 0.10 and top-10 rate at most 0.25; otherwise label the MD estimator as contaminated by output planning.",
+    "stability": "From cached train activations, recompute each direction leaving out one cue slot at a time. Require median cosine to the full direction of at least 0.70 at layer 18 and report every concept-layer value.",
+    "jlens_alignment": "Report cosine(MD, raw W_U J) and cosine(MD, RMS-gain-folded W_U J) per concept and layer with concept-bootstrap intervals. Alignment is diagnostic only and never changes sign, selection, or pass status.",
+    "unit_norm_tolerance": 0.00001
+  },
+  "pairs": [
+    {"pair_id": "animal-cover-turtle", "concepts": ["turtle", "snake"], "behavior_answers": ["shell", "scale"]},
+    {"pair_id": "animal-legs-buffalo2", "concepts": ["buffalo", "spider"], "behavior_answers": ["four", "eight"]},
+    {"pair_id": "basketball-players", "concepts": ["basketball", "baseball"], "behavior_answers": ["5", "9"]},
+    {"pair_id": "beverage-source-wine", "concepts": ["wine", "beer"], "behavior_answers": ["grape", "barley"]},
+    {"pair_id": "bird-time-owl", "concepts": ["owl", "eagle"], "behavior_answers": ["night", "day"]},
+    {"pair_id": "birthstone-emerald-month", "concepts": ["May", "July"], "behavior_answers": ["5", "7"]},
+    {"pair_id": "chem-atmosphere-Z", "concepts": ["nitrogen", "oxygen"], "behavior_answers": ["7", "8"]},
+    {"pair_id": "city-state-Philadelphia", "concepts": ["Philadelphia", "Seattle"], "behavior_answers": ["Pennsylvania", "Washington"]},
+    {"pair_id": "element-color-gold2", "concepts": ["gold", "silver"], "behavior_answers": ["yellow", "gray"]},
+    {"pair_id": "etym-frigg-position", "concepts": ["Friday", "Thursday"], "behavior_answers": ["5", "4"]},
+    {"pair_id": "etym-saturn-position", "concepts": ["Saturn", "Jupiter"], "behavior_answers": ["6", "5"]},
+    {"pair_id": "etym-wargod-month", "concepts": ["March", "June"], "behavior_answers": ["3", "6"]},
+    {"pair_id": "ex-city-capital-Barcelona-Toronto", "concepts": ["Spain", "Canada"], "behavior_answers": ["Madrid", "Ottawa"]},
+    {"pair_id": "ex-city-capital-Lyon-Naples", "concepts": ["France", "Italy"], "behavior_answers": ["Paris", "Rome"]},
+    {"pair_id": "ex-element-state-26-80", "concepts": ["iron", "mercury"], "behavior_answers": ["solid", "liquid"]},
+    {"pair_id": "ex-planet-color-third-fourth", "concepts": ["Earth", "Mars"], "behavior_answers": ["blue", "red"]},
+    {"pair_id": "ex2-city-capital-Munich", "concepts": ["Germany", "Japan"], "behavior_answers": ["Berlin", "Tokyo"]},
+    {"pair_id": "ex2-city-continent-Lima", "concepts": ["Peru", "Egypt"], "behavior_answers": ["South", "Africa"]},
+    {"pair_id": "ex2-language-capital-Greek", "concepts": ["Greece", "Sweden"], "behavior_answers": ["Athens", "Stockholm"]},
+    {"pair_id": "ex2-language-capital-Hungarian", "concepts": ["Hungary", "Poland"], "behavior_answers": ["Budapest", "Warsaw"]}
+  ],
+  "concepts": [
+    {
+      "concept": "turtle", "token_id": 36089, "token_surface": " turtle", "pair_id": "animal-cover-turtle", "foil": "snake",
+      "cues": [
+        {"cue_id": "turtle-train-0", "split": "train", "template_id": "train_description", "fact_id": "turtle-sea-nesting", "text": "A sea reptile returns to a sandy beach to bury a clutch of eggs."},
+        {"cue_id": "turtle-train-1", "split": "train", "template_id": "train_clue", "fact_id": "turtle-log-basking", "text": "A slow pond dweller basks on a log and dives when a hiker approaches."},
+        {"cue_id": "turtle-train-2", "split": "train", "template_id": "train_situation", "fact_id": "turtle-chelonian-migration", "text": "A long-lived chelonian with a beaked mouth migrates between feeding and nesting grounds."},
+        {"cue_id": "turtle-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "turtle-hatchling-horizon", "text": "A hatchling follows the brightest horizon from its nest toward the ocean."},
+        {"cue_id": "turtle-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "turtle-painted-pond", "text": "A painted freshwater reptile suns itself on rocks beside a quiet pond."},
+        {"cue_id": "turtle-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "turtle-leatherback-jellyfish", "text": "A leatherback is the largest living member of this reptile group and feeds mainly on jellyfish."}
+      ]
+    },
+    {
+      "concept": "snake", "token_id": 25265, "token_surface": " snake", "pair_id": "animal-cover-turtle", "foil": "turtle",
+      "cues": [
+        {"cue_id": "snake-train-0", "split": "train", "template_id": "train_description", "fact_id": "snake-forked-tongue", "text": "A limbless reptile samples airborne chemicals with a forked tongue."},
+        {"cue_id": "snake-train-1", "split": "train", "template_id": "train_clue", "fact_id": "snake-python-feeding", "text": "A python coils around a branch before swallowing prey whole."},
+        {"cue_id": "snake-train-2", "split": "train", "template_id": "train_situation", "fact_id": "snake-cobra-hood", "text": "A cobra spreads a hood when threatened."},
+        {"cue_id": "snake-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "snake-rattle-warning", "text": "A desert reptile warns hikers by vibrating a rattle at the end of its tail."},
+        {"cue_id": "snake-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "snake-boa-constriction", "text": "A boa subdues prey by wrapping muscular coils around it."},
+        {"cue_id": "snake-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "snake-skin-shedding", "text": "This elongated reptile periodically sheds its old skin in one piece."}
+      ]
+    },
+    {
+      "concept": "buffalo", "token_id": 81355, "token_surface": " buffalo", "pair_id": "animal-legs-buffalo2", "foil": "spider",
+      "cues": [
+        {"cue_id": "buffalo-train-0", "split": "train", "template_id": "train_description", "fact_id": "buffalo-yellowstone", "text": "A shaggy, hump-shouldered bovine grazes near geothermal valleys in Yellowstone."},
+        {"cue_id": "buffalo-train-1", "split": "train", "template_id": "train_clue", "fact_id": "buffalo-nickel", "text": "The old American nickel once depicted this heavy plains mammal."},
+        {"cue_id": "buffalo-train-2", "split": "train", "template_id": "train_situation", "fact_id": "buffalo-wallow", "text": "A wallow in dry grass marks where a horned herd animal rolled in dust."},
+        {"cue_id": "buffalo-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "buffalo-bison-migration", "text": "A wild bison herd crosses open prairie during a seasonal migration."},
+        {"cue_id": "buffalo-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "buffalo-showman-nickname", "text": "A famous Wild West showman took this animal as his nickname."},
+        {"cue_id": "buffalo-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "buffalo-lake-erie-city", "text": "This plains mammal lends its name to a large city on Lake Erie."}
+      ]
+    },
+    {
+      "concept": "spider", "token_id": 34354, "token_surface": " spider", "pair_id": "animal-legs-buffalo2", "foil": "buffalo",
+      "cues": [
+        {"cue_id": "spider-train-0", "split": "train", "template_id": "train_description", "fact_id": "spider-spinneret-egg-sac", "text": "An arachnid produces silk from spinnerets to protect an egg sac."},
+        {"cue_id": "spider-train-1", "split": "train", "template_id": "train_clue", "fact_id": "spider-tarantula-burrow", "text": "A tarantula waits at the mouth of a burrow for passing prey."},
+        {"cue_id": "spider-train-2", "split": "train", "template_id": "train_situation", "fact_id": "spider-pedipalps-book-lungs", "text": "Pedipalps and book lungs are characteristic anatomy of this small predator."},
+        {"cue_id": "spider-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "spider-widow-hourglass", "text": "A black widow carries an hourglass-shaped marking beneath its abdomen."},
+        {"cue_id": "spider-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "spider-crop-pest-control", "text": "A small arachnid controls crop pests by ambushing insects among leaves."},
+        {"cue_id": "spider-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "spider-jumping-eyes", "text": "A jumping species stalks prey using large forward-facing eyes."}
+      ]
+    },
+    {
+      "concept": "basketball", "token_id": 19240, "token_surface": " basketball", "pair_id": "basketball-players", "foil": "baseball",
+      "cues": [
+        {"cue_id": "basketball-train-0", "split": "train", "template_id": "train_description", "fact_id": "basketball-dribble-hoop", "text": "Players dribble an orange ball and shoot it through a raised hoop."},
+        {"cue_id": "basketball-train-1", "split": "train", "template_id": "train_clue", "fact_id": "basketball-free-throw", "text": "A free throw is taken from a line facing a backboard and rim."},
+        {"cue_id": "basketball-train-2", "split": "train", "template_id": "train_situation", "fact_id": "basketball-fast-break", "text": "A point guard leads a fast break down a hardwood court."},
+        {"cue_id": "basketball-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "basketball-slam-dunk", "text": "A slam dunk sends the ball directly through the basket."},
+        {"cue_id": "basketball-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "basketball-arc-shot", "text": "A shot from beyond the arc earns more points than a closer attempt."},
+        {"cue_id": "basketball-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "basketball-rebound", "text": "A center battles for a rebound after a missed jump shot."}
+      ]
+    },
+    {
+      "concept": "baseball", "token_id": 19507, "token_surface": " baseball", "pair_id": "basketball-players", "foil": "basketball",
+      "cues": [
+        {"cue_id": "baseball-train-0", "split": "train", "template_id": "train_description", "fact_id": "baseball-pitcher-mound", "text": "A pitcher throws from a mound toward a batter at home plate."},
+        {"cue_id": "baseball-train-1", "split": "train", "template_id": "train_clue", "fact_id": "baseball-home-run", "text": "A home run can clear the outfield fence."},
+        {"cue_id": "baseball-train-2", "split": "train", "template_id": "train_situation", "fact_id": "baseball-diamond", "text": "Teams alternate batting and fielding on a diamond."},
+        {"cue_id": "baseball-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "baseball-catcher", "text": "A catcher wears protective gear behind the plate."},
+        {"cue_id": "baseball-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "baseball-innings-statistics", "text": "The sport is tracked with innings, strikes, and earned-run averages."},
+        {"cue_id": "baseball-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "baseball-shortstop", "text": "A shortstop fields a grounder and throws toward first base."}
+      ]
+    },
+    {
+      "concept": "wine", "token_id": 13078, "token_surface": " wine", "pair_id": "beverage-source-wine", "foil": "beer",
+      "cues": [
+        {"cue_id": "wine-train-0", "split": "train", "template_id": "train_description", "fact_id": "wine-sommelier-vintage", "text": "A sommelier evaluates a vintage poured from a corked bottle."},
+        {"cue_id": "wine-train-1", "split": "train", "template_id": "train_clue", "fact_id": "wine-cellar-aging", "text": "A cellar stores bottles so they can age before dinner service."},
+        {"cue_id": "wine-train-2", "split": "train", "template_id": "train_situation", "fact_id": "wine-tannins-terroir", "text": "Tannins and terroir are common terms when discussing this fermented drink."},
+        {"cue_id": "wine-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "wine-glass-swirl", "text": "A stemmed glass is swirled to release the drink's aroma."},
+        {"cue_id": "wine-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "wine-sparkling-celebration", "text": "A sparkling form of this alcoholic drink is often opened for celebrations."},
+        {"cue_id": "wine-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "wine-cheese-pairing", "text": "A dry or sweet alcoholic drink is paired with cheese by a restaurant expert."}
+      ]
+    },
+    {
+      "concept": "beer", "token_id": 12883, "token_surface": " beer", "pair_id": "beverage-source-wine", "foil": "wine",
+      "cues": [
+        {"cue_id": "beer-train-0", "split": "train", "template_id": "train_description", "fact_id": "beer-keg-tap", "text": "A foamy drink is drawn from a keg through a tap."},
+        {"cue_id": "beer-train-1", "split": "train", "template_id": "train_clue", "fact_id": "beer-brewery-hops", "text": "A brewery combines water, yeast, and hops to make this beverage."},
+        {"cue_id": "beer-train-2", "split": "train", "template_id": "train_situation", "fact_id": "beer-lager-stout", "text": "Lager, stout, and pilsner are varieties of this drink."},
+        {"cue_id": "beer-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "beer-pub-pint", "text": "A pint served in a pub develops a frothy head."},
+        {"cue_id": "beer-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "beer-india-pale-ale", "text": "An India pale ale is a hoppy style of this beverage."},
+        {"cue_id": "beer-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "beer-fermentation-canning", "text": "A brewer monitors fermentation before filling cans and bottles."}
+      ]
+    },
+    {
+      "concept": "owl", "token_id": 52269, "token_surface": " owl", "pair_id": "bird-time-owl", "foil": "eagle",
+      "cues": [
+        {"cue_id": "owl-train-0", "split": "train", "template_id": "train_description", "fact_id": "owl-silent-flight", "text": "A bird of prey glides almost silently because of specialized wing feathers."},
+        {"cue_id": "owl-train-1", "split": "train", "template_id": "train_clue", "fact_id": "owl-facial-disc", "text": "A round facial disc channels faint sounds toward this raptor's ears."},
+        {"cue_id": "owl-train-2", "split": "train", "template_id": "train_situation", "fact_id": "owl-pellets", "text": "A barn-dwelling hunter coughs up pellets containing tiny bones."},
+        {"cue_id": "owl-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "owl-wide-eyes-talons", "text": "A wide-eyed raptor grips prey with sharp talons."},
+        {"cue_id": "owl-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "owl-asymmetric-ears", "text": "This bird's asymmetric ears help it locate rodents beneath snow."},
+        {"cue_id": "owl-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "owl-burrowing-species", "text": "A small burrowing species of this raptor nests underground in grasslands."}
+      ]
+    },
+    {
+      "concept": "eagle", "token_id": 59889, "token_surface": " eagle", "pair_id": "bird-time-owl", "foil": "owl",
+      "cues": [
+        {"cue_id": "eagle-train-0", "split": "train", "template_id": "train_description", "fact_id": "eagle-cliff-eyrie", "text": "A large raptor builds an eyrie high on a cliff."},
+        {"cue_id": "eagle-train-1", "split": "train", "template_id": "train_clue", "fact_id": "eagle-beak-vision", "text": "A hooked beak and exceptional long-distance vision help this bird hunt."},
+        {"cue_id": "eagle-train-2", "split": "train", "template_id": "train_situation", "fact_id": "eagle-fish-catch", "text": "A fish-eating raptor snatches prey from a lake with powerful talons."},
+        {"cue_id": "eagle-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "eagle-thermal-soaring", "text": "This soaring bird rides mountain thermals with broad wings spread."},
+        {"cue_id": "eagle-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "eagle-mountain-species", "text": "A large mountain species of this raptor nests across northern ranges."},
+        {"cue_id": "eagle-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "eagle-roman-standard", "text": "Roman legions carried a standard topped by this bird."}
+      ]
+    },
+    {
+      "concept": "May", "token_id": 3217, "token_surface": " May", "pair_id": "birthstone-emerald-month", "foil": "July",
+      "cues": [
+        {"cue_id": "may-train-0", "split": "train", "template_id": "train_description", "fact_id": "may-mothers-observance", "text": "The spring month associated with Mother's Day in the United States."},
+        {"cue_id": "may-train-1", "split": "train", "template_id": "train_clue", "fact_id": "may-cannes-festival", "text": "The month when the Cannes Film Festival is usually held."},
+        {"cue_id": "may-train-2", "split": "train", "template_id": "train_situation", "fact_id": "may-birth-flowers", "text": "A northern-hemisphere month known for hawthorn and lily-of-the-valley birth flowers."},
+        {"cue_id": "may-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "may-modal-verb", "text": "The calendar month whose name is also a modal verb expressing possibility."},
+        {"cue_id": "may-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "may-memorial-observance", "text": "Memorial Day in the United States falls near the end of this month."},
+        {"cue_id": "may-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "may-after-april", "text": "The month immediately after April."}
+      ]
+    },
+    {
+      "concept": "July", "token_id": 5768, "token_surface": " July", "pair_id": "birthstone-emerald-month", "foil": "May",
+      "cues": [
+        {"cue_id": "july-train-0", "split": "train", "template_id": "train_description", "fact_id": "july-independence-observance", "text": "The month when the United States celebrates Independence Day."},
+        {"cue_id": "july-train-1", "split": "train", "template_id": "train_clue", "fact_id": "july-julius-caesar", "text": "The midsummer month named for Julius Caesar."},
+        {"cue_id": "july-train-2", "split": "train", "template_id": "train_situation", "fact_id": "july-full-summer-month", "text": "The first full month of astronomical summer in the Northern Hemisphere."},
+        {"cue_id": "july-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "july-fireworks-holiday", "text": "A school-holiday month often associated with fireworks in the United States."},
+        {"cue_id": "july-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "july-bastille-observance", "text": "Bastille Day occurs during this month."},
+        {"cue_id": "july-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "july-wimbledon-finals", "text": "The Wimbledon tennis finals are usually held during this month."}
+      ]
+    },
+    {
+      "concept": "nitrogen", "token_id": 46403, "token_surface": " nitrogen", "pair_id": "chem-atmosphere-Z", "foil": "oxygen",
+      "cues": [
+        {"cue_id": "nitrogen-train-0", "split": "train", "template_id": "train_description", "fact_id": "nitrogen-food-packaging", "text": "The atmospheric gas used to create an inert blanket in food packaging."},
+        {"cue_id": "nitrogen-train-1", "split": "train", "template_id": "train_clue", "fact_id": "nitrogen-triple-bond", "text": "The element whose diatomic molecules have an exceptionally strong triple bond."},
+        {"cue_id": "nitrogen-train-2", "split": "train", "template_id": "train_situation", "fact_id": "nitrogen-cryogenic-coolant", "text": "A cryogenic coolant commonly used to freeze biological samples."},
+        {"cue_id": "nitrogen-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "nitrogen-soil-fixation", "text": "The nutrient element plants often obtain through fixation by soil bacteria."},
+        {"cue_id": "nitrogen-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "nitrogen-aircraft-tires", "text": "The relatively unreactive gas used to pressurize some aircraft tires."},
+        {"cue_id": "nitrogen-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "nitrogen-symbol-n", "text": "The chemical element represented by the symbol N."}
+      ]
+    },
+    {
+      "concept": "oxygen", "token_id": 23552, "token_surface": " oxygen", "pair_id": "chem-atmosphere-Z", "foil": "nitrogen",
+      "cues": [
+        {"cue_id": "oxygen-train-0", "split": "train", "template_id": "train_description", "fact_id": "oxygen-aerobic-respiration", "text": "The gas consumed by cells during aerobic respiration."},
+        {"cue_id": "oxygen-train-1", "split": "train", "template_id": "train_clue", "fact_id": "oxygen-symbol-o", "text": "The element represented by the chemical symbol O."},
+        {"cue_id": "oxygen-train-2", "split": "train", "template_id": "train_situation", "fact_id": "oxygen-combustion", "text": "A reactive gas that supports combustion."},
+        {"cue_id": "oxygen-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "oxygen-hemoglobin-transport", "text": "The element carried from lungs to tissues by hemoglobin."},
+        {"cue_id": "oxygen-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "oxygen-spacecraft-breathing", "text": "The gas astronauts must carry for breathing in a sealed spacecraft."},
+        {"cue_id": "oxygen-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "oxygen-water-formation", "text": "The element that combines with hydrogen to form water."}
+      ]
+    },
+    {
+      "concept": "Philadelphia", "token_id": 19335, "token_surface": " Philadelphia", "pair_id": "city-state-Philadelphia", "foil": "Seattle",
+      "cues": [
+        {"cue_id": "philadelphia-train-0", "split": "train", "template_id": "train_description", "fact_id": "philadelphia-declaration", "text": "The city where the Declaration of Independence was signed."},
+        {"cue_id": "philadelphia-train-1", "split": "train", "template_id": "train_clue", "fact_id": "philadelphia-delaware-cheesesteak", "text": "A major city on the Delaware River known for cheesesteaks."},
+        {"cue_id": "philadelphia-train-2", "split": "train", "template_id": "train_situation", "fact_id": "philadelphia-independence-hall", "text": "The former national capital whose historic district includes Independence Hall."},
+        {"cue_id": "philadelphia-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "philadelphia-football-stadium", "text": "The city whose professional football team plays at Lincoln Financial Field."},
+        {"cue_id": "philadelphia-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "philadelphia-franklin-printing", "text": "Benjamin Franklin's adopted city and a center of early American printing."},
+        {"cue_id": "philadelphia-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "philadelphia-brotherly-love", "text": "The city commonly nicknamed the City of Brotherly Love."}
+      ]
+    },
+    {
+      "concept": "Seattle", "token_id": 16355, "token_surface": " Seattle", "pair_id": "city-state-Philadelphia", "foil": "Philadelphia",
+      "cues": [
+        {"cue_id": "seattle-train-0", "split": "train", "template_id": "train_description", "fact_id": "seattle-grunge-coffee", "text": "The Puget Sound city associated with grunge music and a major coffee chain."},
+        {"cue_id": "seattle-train-1", "split": "train", "template_id": "train_clue", "fact_id": "seattle-needle-skyline", "text": "A rainy Pacific Northwest port whose skyline includes a needle-shaped tower."},
+        {"cue_id": "seattle-train-2", "split": "train", "template_id": "train_situation", "fact_id": "seattle-aircraft-founding", "text": "The city where a large aircraft manufacturer was founded near Lake Union."},
+        {"cue_id": "seattle-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "seattle-elliott-bay", "text": "A technology hub overlooking Elliott Bay with ferries crossing the water."},
+        {"cue_id": "seattle-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "seattle-pike-place", "text": "The home city of the Pike Place Market fish throwers."},
+        {"cue_id": "seattle-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "seattle-sound-freshwater", "text": "A port city between Puget Sound and a large freshwater lake to its east."}
+      ]
+    },
+    {
+      "concept": "gold", "token_id": 6623, "token_surface": " gold", "pair_id": "element-color-gold2", "foil": "silver",
+      "cues": [
+        {"cue_id": "gold-train-0", "split": "train", "template_id": "train_description", "fact_id": "gold-symbol-au", "text": "The precious metal with chemical symbol Au."},
+        {"cue_id": "gold-train-1", "split": "train", "template_id": "train_clue", "fact_id": "gold-bullion-rings", "text": "A dense noble metal used for bullion and wedding rings."},
+        {"cue_id": "gold-train-2", "split": "train", "template_id": "train_situation", "fact_id": "gold-klondike-panning", "text": "The metal prospectors panned for during the Klondike rush."},
+        {"cue_id": "gold-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "gold-champion-medal", "text": "An Olympic champion traditionally receives a medal made to represent this metal."},
+        {"cue_id": "gold-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "gold-karat-jewelry", "text": "The corrosion-resistant metal measured in karats for jewelry."},
+        {"cue_id": "gold-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "gold-malleable-leaf", "text": "This exceptionally malleable element can be hammered into extremely thin leaf."}
+      ]
+    },
+    {
+      "concept": "silver", "token_id": 14961, "token_surface": " silver", "pair_id": "element-color-gold2", "foil": "gold",
+      "cues": [
+        {"cue_id": "silver-train-0", "split": "train", "template_id": "train_description", "fact_id": "silver-symbol-ag", "text": "The precious metal with chemical symbol Ag."},
+        {"cue_id": "silver-train-1", "split": "train", "template_id": "train_clue", "fact_id": "silver-conductivity-mirrors", "text": "A highly conductive metal used in mirrors and electronics."},
+        {"cue_id": "silver-train-2", "split": "train", "template_id": "train_situation", "fact_id": "silver-coins-tarnish", "text": "The metal historically minted into coins and tarnished by sulfur compounds."},
+        {"cue_id": "silver-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "silver-runner-up-medal", "text": "The runner-up medal at many competitions represents this metal."},
+        {"cue_id": "silver-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "silver-photographic-halide", "text": "The element used in photographic halide crystals."},
+        {"cue_id": "silver-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "silver-antimicrobial-dressing", "text": "The antimicrobial properties of this metal are used in some wound dressings."}
+      ]
+    },
+    {
+      "concept": "Friday", "token_id": 6602, "token_surface": " Friday", "pair_id": "etym-frigg-position", "foil": "Thursday",
+      "cues": [
+        {"cue_id": "friday-train-0", "split": "train", "template_id": "train_description", "fact_id": "friday-before-saturday", "text": "The weekday immediately before Saturday."},
+        {"cue_id": "friday-train-1", "split": "train", "template_id": "train_clue", "fact_id": "friday-tgif", "text": "The workweek ending celebrated by the abbreviation TGIF."},
+        {"cue_id": "friday-train-2", "split": "train", "template_id": "train_situation", "fact_id": "friday-congregational-prayer", "text": "The weekday on which Muslims traditionally gather for congregational prayer."},
+        {"cue_id": "friday-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "friday-venus-languages", "text": "The weekday associated with the planet Venus in several Romance languages."},
+        {"cue_id": "friday-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "friday-crusoe-companion", "text": "The day Robinson Crusoe used as the name of his island companion."},
+        {"cue_id": "friday-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "friday-holy-week", "text": "Many Christian traditions remember the crucifixion on the weekday bearing this name during Holy Week."}
+      ]
+    },
+    {
+      "concept": "Thursday", "token_id": 7794, "token_surface": " Thursday", "pair_id": "etym-frigg-position", "foil": "Friday",
+      "cues": [
+        {"cue_id": "thursday-train-0", "split": "train", "template_id": "train_description", "fact_id": "thursday-thanksgiving", "text": "The weekday when Thanksgiving is observed in the United States."},
+        {"cue_id": "thursday-train-1", "split": "train", "template_id": "train_clue", "fact_id": "thursday-thunder-deity", "text": "The weekday named in English for a Norse thunder deity."},
+        {"cue_id": "thursday-train-2", "split": "train", "template_id": "train_situation", "fact_id": "thursday-after-wednesday", "text": "The day that follows Wednesday."},
+        {"cue_id": "thursday-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "thursday-jobless-claims", "text": "The usual publication day for weekly jobless-claims reports in the United States."},
+        {"cue_id": "thursday-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "thursday-nursery-rhyme", "text": "In the traditional nursery rhyme, a child born on this weekday has far to go."},
+        {"cue_id": "thursday-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "thursday-maundy", "text": "Maundy celebrations in Holy Week are held on this weekday."}
+      ]
+    },
+    {
+      "concept": "Saturn", "token_id": 49153, "token_surface": " Saturn", "pair_id": "etym-saturn-position", "foil": "Jupiter",
+      "cues": [
+        {"cue_id": "saturn-train-0", "split": "train", "template_id": "train_description", "fact_id": "saturn-rings", "text": "The gas giant encircled by the Solar System's most conspicuous ring system."},
+        {"cue_id": "saturn-train-1", "split": "train", "template_id": "train_clue", "fact_id": "saturn-cassini-spacecraft", "text": "The planet visited for years by the Cassini spacecraft."},
+        {"cue_id": "saturn-train-2", "split": "train", "template_id": "train_situation", "fact_id": "saturn-titan-enceladus", "text": "The world orbited by Titan and Enceladus."},
+        {"cue_id": "saturn-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "saturn-polar-hexagon", "text": "A low-density outer planet with a hexagonal storm near its north pole."},
+        {"cue_id": "saturn-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "saturn-orbital-period", "text": "This outer planet takes almost three decades to complete one orbit around the Sun."},
+        {"cue_id": "saturn-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "saturn-lowest-density", "text": "The least dense planet in the Solar System, theoretically able to float in a vast enough ocean."}
+      ]
+    },
+    {
+      "concept": "Jupiter", "token_id": 49689, "token_surface": " Jupiter", "pair_id": "etym-saturn-position", "foil": "Saturn",
+      "cues": [
+        {"cue_id": "jupiter-train-0", "split": "train", "template_id": "train_description", "fact_id": "jupiter-largest-planet", "text": "The largest planet in the Solar System."},
+        {"cue_id": "jupiter-train-1", "split": "train", "template_id": "train_clue", "fact_id": "jupiter-galilean-moons", "text": "The gas giant orbited by Io, Europa, Ganymede, and Callisto."},
+        {"cue_id": "jupiter-train-2", "split": "train", "template_id": "train_situation", "fact_id": "jupiter-magnetic-field", "text": "The planet whose powerful magnetic field creates intense radiation belts."},
+        {"cue_id": "jupiter-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "jupiter-banded-storm", "text": "A banded outer world with a centuries-old giant storm."},
+        {"cue_id": "jupiter-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "jupiter-juno-spacecraft", "text": "The planet visited by the Juno spacecraft."},
+        {"cue_id": "jupiter-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "jupiter-roman-king", "text": "The Roman king of the gods lends his name to this massive world."}
+      ]
+    },
+    {
+      "concept": "March", "token_id": 5470, "token_surface": " March", "pair_id": "etym-wargod-month", "foil": "June",
+      "cues": [
+        {"cue_id": "march-train-0", "split": "train", "template_id": "train_description", "fact_id": "march-vernal-equinox", "text": "The month when the northern vernal equinox usually occurs."},
+        {"cue_id": "march-train-1", "split": "train", "template_id": "train_clue", "fact_id": "march-ides-caesar", "text": "The calendar month containing the Ides associated with Julius Caesar's assassination."},
+        {"cue_id": "march-train-2", "split": "train", "template_id": "train_situation", "fact_id": "march-college-tournament", "text": "The month that gives its name to the major American college basketball tournament."},
+        {"cue_id": "march-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "march-after-february", "text": "The early-spring month following February."},
+        {"cue_id": "march-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "march-daffodil", "text": "The month whose birth flowers include daffodils."},
+        {"cue_id": "march-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "march-daylight-saving", "text": "The month when clocks often move forward for daylight saving time in the United States."}
+      ]
+    },
+    {
+      "concept": "June", "token_id": 5534, "token_surface": " June", "pair_id": "etym-wargod-month", "foil": "March",
+      "cues": [
+        {"cue_id": "june-train-0", "split": "train", "template_id": "train_description", "fact_id": "june-summer-solstice", "text": "The month when the northern summer solstice usually occurs."},
+        {"cue_id": "june-train-1", "split": "train", "template_id": "train_clue", "fact_id": "june-weddings-vacations", "text": "A month widely associated with weddings and the start of school vacations."},
+        {"cue_id": "june-train-2", "split": "train", "template_id": "train_situation", "fact_id": "june-juno", "text": "The calendar month named for the Roman goddess Juno."},
+        {"cue_id": "june-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "june-first-half-close", "text": "The month that closes the first half of the calendar year."},
+        {"cue_id": "june-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "june-birthstones", "text": "The month whose birthstone can be pearl or alexandrite."},
+        {"cue_id": "june-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "june-zodiac", "text": "The month whose zodiac signs are Gemini and Cancer."}
+      ]
+    },
+    {
+      "concept": "Spain", "token_id": 17689, "token_surface": " Spain", "pair_id": "ex-city-capital-Barcelona-Toronto", "foil": "Canada",
+      "cues": [
+        {"cue_id": "spain-train-0", "split": "train", "template_id": "train_description", "fact_id": "spain-flamenco-paella", "text": "The Iberian country associated with flamenco and paella."},
+        {"cue_id": "spain-train-1", "split": "train", "template_id": "train_clue", "fact_id": "spain-island-groups", "text": "The European monarchy that includes the Balearic and Canary Islands."},
+        {"cue_id": "spain-train-2", "split": "train", "template_id": "train_situation", "fact_id": "spain-castilian-catalan", "text": "The nation where Castilian and Catalan are widely spoken."},
+        {"cue_id": "spain-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "spain-alhambra-camino", "text": "The country of the Alhambra and the Camino de Santiago."},
+        {"cue_id": "spain-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "spain-pamplona", "text": "The nation that hosts the running of the bulls in Pamplona."},
+        {"cue_id": "spain-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "spain-valencia-malaga", "text": "The country whose Mediterranean coast includes Valencia and Málaga."}
+      ]
+    },
+    {
+      "concept": "Canada", "token_id": 6864, "token_surface": " Canada", "pair_id": "ex-city-capital-Barcelona-Toronto", "foil": "Spain",
+      "cues": [
+        {"cue_id": "canada-train-0", "split": "train", "template_id": "train_description", "fact_id": "canada-maple-flag", "text": "The country whose national flag features a maple leaf."},
+        {"cue_id": "canada-train-1", "split": "train", "template_id": "train_clue", "fact_id": "canada-bilingual-federation", "text": "A bilingual federation stretching from the Atlantic to the Pacific above the United States."},
+        {"cue_id": "canada-train-2", "split": "train", "template_id": "train_situation", "fact_id": "canada-provinces-territories", "text": "The nation divided into provinces and territories, including Québec and Alberta."},
+        {"cue_id": "canada-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "canada-hockey-mounties", "text": "The country associated with ice hockey, Mounties, and vast boreal forests."},
+        {"cue_id": "canada-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "canada-area-rank", "text": "The world's second-largest country by total area."},
+        {"cue_id": "canada-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "canada-loonie-toonie", "text": "The country whose currency includes coins nicknamed the loonie and toonie."}
+      ]
+    },
+    {
+      "concept": "France", "token_id": 9625, "token_surface": " France", "pair_id": "ex-city-capital-Lyon-Naples", "foil": "Italy",
+      "cues": [
+        {"cue_id": "france-train-0", "split": "train", "template_id": "train_description", "fact_id": "france-hexagon", "text": "The European country often called the Hexagon because of its mainland shape."},
+        {"cue_id": "france-train-1", "split": "train", "template_id": "train_clue", "fact_id": "france-baguette-louvre", "text": "The nation associated with baguettes, the Louvre, and the tricolor."},
+        {"cue_id": "france-train-2", "split": "train", "template_id": "train_situation", "fact_id": "france-revolution", "text": "The country where the Revolution of 1789 began."},
+        {"cue_id": "france-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "france-regions", "text": "A republic whose regions include Normandy, Brittany, and Provence."},
+        {"cue_id": "france-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "france-tgv", "text": "The country whose high-speed trains are branded TGV."},
+        {"cue_id": "france-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "france-two-coasts-corsica", "text": "The nation bordering both the Atlantic and the Mediterranean, with Corsica as an island region."}
+      ]
+    },
+    {
+      "concept": "Italy", "token_id": 15344, "token_surface": " Italy", "pair_id": "ex-city-capital-Lyon-Naples", "foil": "France",
+      "cues": [
+        {"cue_id": "italy-train-0", "split": "train", "template_id": "train_description", "fact_id": "italy-boot-peninsula", "text": "The boot-shaped peninsula nation extending into the Mediterranean."},
+        {"cue_id": "italy-train-1", "split": "train", "template_id": "train_clue", "fact_id": "italy-renaissance-cities", "text": "The country associated with Renaissance centers such as Florence and Venice."},
+        {"cue_id": "italy-train-2", "split": "train", "template_id": "train_situation", "fact_id": "italy-cuisine", "text": "The nation whose cuisine features risotto, polenta, and espresso."},
+        {"cue_id": "italy-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "italy-regions-islands", "text": "A European republic containing Tuscany, Sicily, and Sardinia."},
+        {"cue_id": "italy-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "italy-sports-cars", "text": "The country where Ferrari and Lamborghini were founded."},
+        {"cue_id": "italy-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "italy-opera-houses", "text": "The nation where the opera houses La Scala and La Fenice are located."}
+      ]
+    },
+    {
+      "concept": "iron", "token_id": 11001, "token_surface": " iron", "pair_id": "ex-element-state-26-80", "foil": "mercury",
+      "cues": [
+        {"cue_id": "iron-train-0", "split": "train", "template_id": "train_description", "fact_id": "iron-symbol-fe", "text": "The magnetic element with chemical symbol Fe."},
+        {"cue_id": "iron-train-1", "split": "train", "template_id": "train_clue", "fact_id": "iron-rust", "text": "A metal that forms rust when exposed to water and air."},
+        {"cue_id": "iron-train-2", "split": "train", "template_id": "train_situation", "fact_id": "iron-heme", "text": "The element central to the heme group in blood."},
+        {"cue_id": "iron-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "iron-steel", "text": "The main metallic ingredient in most steel alloys."},
+        {"cue_id": "iron-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "iron-blacksmith", "text": "The metal forged by blacksmiths into tools and horseshoes."},
+        {"cue_id": "iron-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "iron-planetary-core", "text": "The element found at the core of many terrestrial planets and in cast cookware."}
+      ]
+    },
+    {
+      "concept": "mercury", "token_id": 50752, "token_surface": " mercury", "pair_id": "ex-element-state-26-80", "foil": "iron",
+      "cues": [
+        {"cue_id": "mercury-train-0", "split": "train", "template_id": "train_description", "fact_id": "mercury-symbol-hg", "text": "The toxic element with chemical symbol Hg."},
+        {"cue_id": "mercury-train-1", "split": "train", "template_id": "train_clue", "fact_id": "mercury-thermometer", "text": "The metallic substance historically used in glass thermometers."},
+        {"cue_id": "mercury-train-2", "split": "train", "template_id": "train_situation", "fact_id": "mercury-minamata", "text": "The element associated with Minamata disease."},
+        {"cue_id": "mercury-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "mercury-vapor-lamps", "text": "A dense metal whose vapor was once used in fluorescent lamps."},
+        {"cue_id": "mercury-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "mercury-quicksilver", "text": "The element called quicksilver in older English."},
+        {"cue_id": "mercury-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "mercury-barometer", "text": "The metal used in traditional barometers to measure air pressure."}
+      ]
+    },
+    {
+      "concept": "Earth", "token_id": 9237, "token_surface": " Earth", "pair_id": "ex-planet-color-third-fourth", "foil": "Mars",
+      "cues": [
+        {"cue_id": "earth-train-0", "split": "train", "template_id": "train_description", "fact_id": "earth-human-home", "text": "The home planet of humanity and all known life."},
+        {"cue_id": "earth-train-1", "split": "train", "template_id": "train_clue", "fact_id": "earth-moon-tides", "text": "The world whose single large moon drives ocean tides."},
+        {"cue_id": "earth-train-2", "split": "train", "template_id": "train_situation", "fact_id": "earth-continents-ocean", "text": "The planet with seven continents and a global ocean."},
+        {"cue_id": "earth-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "earth-apollo-view", "text": "The world observed by Apollo astronauts as a small sphere above the lunar horizon."},
+        {"cue_id": "earth-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "earth-plate-tectonics", "text": "The planet with active plate tectonics divided into moving crustal plates."},
+        {"cue_id": "earth-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "earth-space-station", "text": "The planet on which the International Space Station completes its orbits."}
+      ]
+    },
+    {
+      "concept": "Mars", "token_id": 21048, "token_surface": " Mars", "pair_id": "ex-planet-color-third-fourth", "foil": "Earth",
+      "cues": [
+        {"cue_id": "mars-train-0", "split": "train", "template_id": "train_description", "fact_id": "mars-olympus-valles", "text": "The planet hosting Olympus Mons and Valles Marineris."},
+        {"cue_id": "mars-train-1", "split": "train", "template_id": "train_clue", "fact_id": "mars-rovers", "text": "The world explored by the Curiosity and Perseverance rovers."},
+        {"cue_id": "mars-train-2", "split": "train", "template_id": "train_situation", "fact_id": "mars-phobos-deimos", "text": "The planet orbited by Phobos and Deimos."},
+        {"cue_id": "mars-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "mars-thin-atmosphere", "text": "A cold desert world with a thin atmosphere dominated by a greenhouse gas."},
+        {"cue_id": "mars-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "mars-hellas-basin", "text": "The world whose surface includes the enormous Hellas impact basin."},
+        {"cue_id": "mars-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "mars-human-destination", "text": "The planet proposed as a future destination for human colonists after the Moon."}
+      ]
+    },
+    {
+      "concept": "Germany", "token_id": 9856, "token_surface": " Germany", "pair_id": "ex2-city-capital-Munich", "foil": "Japan",
+      "cues": [
+        {"cue_id": "germany-train-0", "split": "train", "template_id": "train_description", "fact_id": "germany-bundestag", "text": "The European federal republic whose parliament is called the Bundestag."},
+        {"cue_id": "germany-train-1", "split": "train", "template_id": "train_clue", "fact_id": "germany-autobahn-rhine", "text": "The country associated with autobahns and the Rhine."},
+        {"cue_id": "germany-train-2", "split": "train", "template_id": "train_situation", "fact_id": "germany-reunification", "text": "The nation reunified after a wall had divided its eastern and western states."},
+        {"cue_id": "germany-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "germany-composers", "text": "The country that produced composers Bach and Beethoven."},
+        {"cue_id": "germany-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "germany-euro-compounds", "text": "The nation using the euro whose language is famous for long compound nouns."},
+        {"cue_id": "germany-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "germany-black-forest-ruhr", "text": "The country containing the Black Forest and the Ruhr industrial region."}
+      ]
+    },
+    {
+      "concept": "Japan", "token_id": 6323, "token_surface": " Japan", "pair_id": "ex2-city-capital-Munich", "foil": "Germany",
+      "cues": [
+        {"cue_id": "japan-train-0", "split": "train", "template_id": "train_description", "fact_id": "japan-shinto-yen", "text": "The island nation associated with Shinto shrines and the yen."},
+        {"cue_id": "japan-train-1", "split": "train", "template_id": "train_clue", "fact_id": "japan-main-islands", "text": "An archipelago whose main islands include Honshu, Hokkaido, Kyushu, and Shikoku."},
+        {"cue_id": "japan-train-2", "split": "train", "template_id": "train_situation", "fact_id": "japan-meiji-restoration", "text": "The country where the Meiji Restoration transformed government and industry."},
+        {"cue_id": "japan-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "japan-blossoms-trains", "text": "The nation known for cherry-blossom viewing and high-speed bullet trains."},
+        {"cue_id": "japan-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "japan-mount-fuji", "text": "The country where Mount Fuji is the highest peak."},
+        {"cue_id": "japan-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "japan-emperor", "text": "The constitutional monarchy whose sovereign is an emperor."}
+      ]
+    },
+    {
+      "concept": "Peru", "token_id": 47747, "token_surface": " Peru", "pair_id": "ex2-city-continent-Lima", "foil": "Egypt",
+      "cues": [
+        {"cue_id": "peru-train-0", "split": "train", "template_id": "train_description", "fact_id": "peru-machu-picchu", "text": "The Andean country containing Machu Picchu."},
+        {"cue_id": "peru-train-1", "split": "train", "template_id": "train_clue", "fact_id": "peru-quechua", "text": "The nation where Quechua remains an official language alongside the colonial language."},
+        {"cue_id": "peru-train-2", "split": "train", "template_id": "train_situation", "fact_id": "peru-ceviche-titicaca", "text": "The country whose cuisine includes ceviche and whose highlands surround Lake Titicaca."},
+        {"cue_id": "peru-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "peru-inca", "text": "The modern nation at the heart of the former Inca Empire."},
+        {"cue_id": "peru-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "peru-nazca", "text": "The Pacific-coast country famous for the Nazca Lines."},
+        {"cue_id": "peru-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "peru-vicuna", "text": "The country whose national animal is the vicuña."}
+      ]
+    },
+    {
+      "concept": "Egypt", "token_id": 14867, "token_surface": " Egypt", "pair_id": "ex2-city-continent-Lima", "foil": "Peru",
+      "cues": [
+        {"cue_id": "egypt-train-0", "split": "train", "template_id": "train_description", "fact_id": "egypt-giza-pharaohs", "text": "The country of the pyramids at Giza and the ancient pharaohs."},
+        {"cue_id": "egypt-train-1", "split": "train", "template_id": "train_clue", "fact_id": "egypt-nile-mediterranean", "text": "The nation through which the Nile reaches the Mediterranean."},
+        {"cue_id": "egypt-train-2", "split": "train", "template_id": "train_situation", "fact_id": "egypt-luxor-karnak", "text": "The modern state containing the temples of Luxor and Karnak."},
+        {"cue_id": "egypt-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "egypt-hieroglyphs", "text": "The country whose ancient writing system used hieroglyphs."},
+        {"cue_id": "egypt-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "egypt-suez", "text": "The nation where the Suez Canal connects two major seas."},
+        {"cue_id": "egypt-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "egypt-valley-kings", "text": "The country whose ancient rulers built monumental tombs in the Valley of the Kings."}
+      ]
+    },
+    {
+      "concept": "Greece", "token_id": 24427, "token_surface": " Greece", "pair_id": "ex2-language-capital-Greek", "foil": "Sweden",
+      "cues": [
+        {"cue_id": "greece-train-0", "split": "train", "template_id": "train_description", "fact_id": "greece-ancient-olympics", "text": "The Aegean country where the ancient Olympic Games began."},
+        {"cue_id": "greece-train-1", "split": "train", "template_id": "train_clue", "fact_id": "greece-crete-rhodes", "text": "The nation whose mainland and islands include Crete and Rhodes."},
+        {"cue_id": "greece-train-2", "split": "train", "template_id": "train_situation", "fact_id": "greece-parthenon-philosophers", "text": "The country associated with the Parthenon and classical philosophers."},
+        {"cue_id": "greece-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "greece-city-states", "text": "A Mediterranean republic whose ancient city-states included Sparta and Corinth."},
+        {"cue_id": "greece-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "greece-homer-script", "text": "The country whose modern alphabet descends directly from the script used by Homer."},
+        {"cue_id": "greece-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "greece-mount-olympus", "text": "The nation where Mount Olympus figures prominently in mythology."}
+      ]
+    },
+    {
+      "concept": "Sweden", "token_id": 23190, "token_surface": " Sweden", "pair_id": "ex2-language-capital-Greek", "foil": "Greece",
+      "cues": [
+        {"cue_id": "sweden-train-0", "split": "train", "template_id": "train_description", "fact_id": "sweden-nobel", "text": "The Scandinavian kingdom associated with the Nobel Prizes."},
+        {"cue_id": "sweden-train-1", "split": "train", "template_id": "train_clue", "fact_id": "sweden-ikea", "text": "The Nordic country where IKEA was founded."},
+        {"cue_id": "sweden-train-2", "split": "train", "template_id": "train_situation", "fact_id": "sweden-nordic-cross", "text": "The nation whose flag bears a contrasting Nordic cross."},
+        {"cue_id": "sweden-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "sweden-peninsula", "text": "A constitutional monarchy occupying the eastern side of the Scandinavian Peninsula."},
+        {"cue_id": "sweden-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "sweden-vasa-midsummer", "text": "The country known for the Vasa warship museum and midsummer celebrations."},
+        {"cue_id": "sweden-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "sweden-volvo-saab", "text": "The Nordic nation whose automotive brands include Volvo and Saab."}
+      ]
+    },
+    {
+      "concept": "Hungary", "token_id": 42776, "token_surface": " Hungary", "pair_id": "ex2-language-capital-Hungarian", "foil": "Poland",
+      "cues": [
+        {"cue_id": "hungary-train-0", "split": "train", "template_id": "train_description", "fact_id": "hungary-danube-food", "text": "The landlocked Danube country known for paprika and goulash."},
+        {"cue_id": "hungary-train-1", "split": "train", "template_id": "train_clue", "fact_id": "hungary-magyar", "text": "The Central European nation where the Magyar language is spoken."},
+        {"cue_id": "hungary-train-2", "split": "train", "template_id": "train_situation", "fact_id": "hungary-bartok", "text": "The country associated with the composer Béla Bartók."},
+        {"cue_id": "hungary-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "hungary-balaton", "text": "The nation whose large freshwater Lake Balaton is a popular resort."},
+        {"cue_id": "hungary-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "hungary-rubik", "text": "The country where the Rubik's Cube was invented."},
+        {"cue_id": "hungary-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "hungary-gyor-szeged", "text": "The state whose cities include Győr and Szeged along a major European river."}
+      ]
+    },
+    {
+      "concept": "Poland", "token_id": 27602, "token_surface": " Poland", "pair_id": "ex2-language-capital-Hungarian", "foil": "Hungary",
+      "cues": [
+        {"cue_id": "poland-train-0", "split": "train", "template_id": "train_description", "fact_id": "poland-chopin", "text": "The Central European country where Chopin was born."},
+        {"cue_id": "poland-train-1", "split": "train", "template_id": "train_clue", "fact_id": "poland-solidarity", "text": "The nation associated with the Solidarity trade-union movement at Gdańsk."},
+        {"cue_id": "poland-train-2", "split": "train", "template_id": "train_situation", "fact_id": "poland-vistula", "text": "The country through which the Vistula River flows to the Baltic."},
+        {"cue_id": "poland-train-3", "split": "train", "template_id": "train_riddle", "fact_id": "poland-krakow-salt", "text": "The nation whose historic city Kraków lies near the Wieliczka salt mine."},
+        {"cue_id": "poland-heldout-0", "split": "heldout", "template_id": "heldout_new_clue", "fact_id": "poland-copernicus", "text": "The country where Nicolaus Copernicus was born."},
+        {"cue_id": "poland-heldout-1", "split": "heldout", "template_id": "heldout_independent", "fact_id": "poland-bicolor-flag", "text": "The state whose white-and-crimson flag is a simple horizontal bicolor."}
+      ]
+    }
+  ]
+}

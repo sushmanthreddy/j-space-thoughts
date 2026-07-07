@@ -1,0 +1,1904 @@
+{
+  "schema_version": "1.0.0",
+  "dataset": "ambiguity_flagship",
+  "seed": 1729,
+  "provenance": {
+    "origin": "Original controlled English benchmark authored for this repository on 2026-07-07.",
+    "method": "Manual construction from standard lexical-ambiguity, attachment-ambiguity, garden-path, and anaphora construction families; no model output was used to generate, filter, rank, or label items.",
+    "external_corpus": null,
+    "canonical_examples": "Garden-path structures are original lexical variants of standard psycholinguistic construction types; no published item list was copied.",
+    "license_note": "Distributed with this repository under the repository's terms."
+  },
+  "design": {
+    "item_count": 120,
+    "category_counts": {
+      "lexical_ambiguity": 30,
+      "pp_attachment": 30,
+      "garden_path": 30,
+      "ambiguous_pronoun": 30
+    },
+    "id_contract": "IDs are stable, category-prefixed, zero-padded identifiers and must never be recycled.",
+    "deduplication": "Sentences are unique after Unicode NFKC normalization, whitespace collapse, and case-folding.",
+    "concept_label_contract": "Each reading has a distinct, lowercase semantic proxy intended to be one Qwen next-token unit after a leading-space boundary. Exact single-token status is a runtime gate against the pinned tokenizer revision; a failed label must reject the item rather than be silently split.",
+    "garden_path_reading_contract": "For reduced-relative and NP/Z items, r1 is the globally licensed reanalysis and r2 is the locally licensed initial parse that creates the garden path; r2 need not integrate the disambiguating spillover. Gerund-participle items instead retain two globally licensed parses.",
+    "tokenizer_validation": {
+      "model_id": "Qwen/Qwen2.5-7B-Instruct",
+      "revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+      "concept_method": "Accept the first one-token surface among a leading-space concept label and the bare label.",
+      "probe_method": "Render the full probe, append one space plus A or B, require exact prompt-prefix preservation, and require exactly one appended token.",
+      "concept_item_readings_passed": 240,
+      "probe_item_labels_passed": 240,
+      "model_inference_used": false
+    },
+    "behavior_probe_contract": {
+      "type": "forced_choice",
+      "render_template": "Sentence: {sentence}\nQuestion: {question}\nA: {choice_for_A}\nB: {choice_for_B}\nAnswer with exactly one letter.\nAnswer:",
+      "primary_metric": "M = logit(target.token_label) - logit(foil.token_label)",
+      "token_boundary": "The scored continuation surface is one space followed by the ASCII token label after the final colon; validate prompt-prefix preservation and exactly one appended token for the pinned Qwen tokenizer.",
+      "counterbalancing": "Run a mirrored probe with reading-to-letter assignments reversed. Report the mean signed margin after orienting both probes to target reading r1; retain both raw margins.",
+      "interpretation": "Target and foil define a signed comparison axis, not a gold intended meaning. The clean model's commitment is whichever oriented reading has the larger counterbalanced logit."
+    }
+  },
+  "items": [
+    {
+      "id": "lexical_001",
+      "category": "lexical_ambiguity",
+      "sentence": "The bank closed before sunset.",
+      "readings": [
+        {"id": "r1", "description": "A financial institution stopped operating for the day.", "concept_label": "money"},
+        {"id": "r2", "description": "The land beside a river became closed or inaccessible.", "concept_label": "river"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does bank denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a financial institution"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "land beside a river"}
+      }
+    },
+    {
+      "id": "lexical_002",
+      "category": "lexical_ambiguity",
+      "sentence": "The bat landed near the fence.",
+      "readings": [
+        {"id": "r1", "description": "A flying mammal came down near the fence.", "concept_label": "animal"},
+        {"id": "r2", "description": "A piece of sports equipment fell near the fence.", "concept_label": "sports"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does bat denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a flying mammal"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "sports equipment"}
+      }
+    },
+    {
+      "id": "lexical_003",
+      "category": "lexical_ambiguity",
+      "sentence": "The crane moved slowly across the yard.",
+      "readings": [
+        {"id": "r1", "description": "A long-legged bird walked across the yard.", "concept_label": "bird"},
+        {"id": "r2", "description": "A lifting machine traveled or swung across the yard.", "concept_label": "machine"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does crane denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a long-legged bird"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a lifting machine"}
+      }
+    },
+    {
+      "id": "lexical_004",
+      "category": "lexical_ambiguity",
+      "sentence": "The seal was difficult to replace.",
+      "readings": [
+        {"id": "r1", "description": "A trained marine animal was difficult to substitute.", "concept_label": "animal"},
+        {"id": "r2", "description": "A closure, gasket, or stamped seal was difficult to replace.", "concept_label": "stamp"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does seal denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a marine animal"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a closure or stamp"}
+      }
+    },
+    {
+      "id": "lexical_005",
+      "category": "lexical_ambiguity",
+      "sentence": "Everyone noticed the spring.",
+      "readings": [
+        {"id": "r1", "description": "Everyone noticed the season following winter.", "concept_label": "season"},
+        {"id": "r2", "description": "Everyone noticed a source of water emerging from the ground.", "concept_label": "water"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does spring denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the season"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a natural water source"}
+      }
+    },
+    {
+      "id": "lexical_006",
+      "category": "lexical_ambiguity",
+      "sentence": "The match ended abruptly.",
+      "readings": [
+        {"id": "r1", "description": "A sporting contest ended abruptly.", "concept_label": "contest"},
+        {"id": "r2", "description": "A small fire-lighting stick burned out or was extinguished abruptly.", "concept_label": "fire"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does match denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a sporting contest"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a fire-lighting stick"}
+      }
+    },
+    {
+      "id": "lexical_007",
+      "category": "lexical_ambiguity",
+      "sentence": "The bark was unusually rough.",
+      "readings": [
+        {"id": "r1", "description": "The outer covering of a tree had a rough texture.", "concept_label": "tree"},
+        {"id": "r2", "description": "A dog's vocal sound was unusually harsh.", "concept_label": "dog"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does bark denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a tree's outer covering"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a dog's vocal sound"}
+      }
+    },
+    {
+      "id": "lexical_008",
+      "category": "lexical_ambiguity",
+      "sentence": "The club was left in the basement.",
+      "readings": [
+        {"id": "r1", "description": "A social organization was abandoned or housed in the basement.", "concept_label": "group"},
+        {"id": "r2", "description": "A heavy striking weapon was left in the basement.", "concept_label": "weapon"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does club denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a social organization"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a striking weapon"}
+      }
+    },
+    {
+      "id": "lexical_009",
+      "category": "lexical_ambiguity",
+      "sentence": "They searched for the mole all night.",
+      "readings": [
+        {"id": "r1", "description": "They searched for a small burrowing animal.", "concept_label": "animal"},
+        {"id": "r2", "description": "They searched for a covert insider or spy.", "concept_label": "spy"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does mole denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a burrowing animal"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a covert insider"}
+      }
+    },
+    {
+      "id": "lexical_010",
+      "category": "lexical_ambiguity",
+      "sentence": "The jam lasted for hours.",
+      "readings": [
+        {"id": "r1", "description": "A traffic blockage lasted for hours.", "concept_label": "traffic"},
+        {"id": "r2", "description": "An informal music session lasted for hours.", "concept_label": "music"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does jam denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a traffic blockage"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "an informal music session"}
+      }
+    },
+    {
+      "id": "lexical_011",
+      "category": "lexical_ambiguity",
+      "sentence": "The draft caused several complaints.",
+      "readings": [
+        {"id": "r1", "description": "A preliminary version of a document caused complaints.", "concept_label": "document"},
+        {"id": "r2", "description": "Compulsory military recruitment caused complaints.", "concept_label": "military"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does draft denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a preliminary document"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "compulsory military service"}
+      }
+    },
+    {
+      "id": "lexical_012",
+      "category": "lexical_ambiguity",
+      "sentence": "They called the package light.",
+      "readings": [
+        {"id": "r1", "description": "They said the package had little weight.", "concept_label": "weight"},
+        {"id": "r2", "description": "They said the package had a pale color.", "concept_label": "color"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "In what sense is the package light?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "low in weight"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "pale in color"}
+      }
+    },
+    {
+      "id": "lexical_013",
+      "category": "lexical_ambiguity",
+      "sentence": "The plane was on the workbench.",
+      "readings": [
+        {"id": "r1", "description": "A model or small aircraft was on the workbench.", "concept_label": "aircraft"},
+        {"id": "r2", "description": "A woodworking tool for smoothing surfaces was on the workbench.", "concept_label": "tool"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does plane denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "an aircraft"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a woodworking tool"}
+      }
+    },
+    {
+      "id": "lexical_014",
+      "category": "lexical_ambiguity",
+      "sentence": "The pitcher broke during practice.",
+      "readings": [
+        {"id": "r1", "description": "The baseball player was physically or emotionally broken during practice.", "concept_label": "athlete"},
+        {"id": "r2", "description": "A handled liquid container shattered during practice.", "concept_label": "container"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does pitcher denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a baseball player"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a liquid container"}
+      }
+    },
+    {
+      "id": "lexical_015",
+      "category": "lexical_ambiguity",
+      "sentence": "The file was missing from the cabinet.",
+      "readings": [
+        {"id": "r1", "description": "A folder or stored document was missing.", "concept_label": "document"},
+        {"id": "r2", "description": "A metal shaping tool was missing.", "concept_label": "tool"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does file denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a stored document"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a metal shaping tool"}
+      }
+    },
+    {
+      "id": "lexical_016",
+      "category": "lexical_ambiguity",
+      "sentence": "His watch lasted four hours.",
+      "readings": [
+        {"id": "r1", "description": "His timepiece functioned for four hours before stopping.", "concept_label": "clock"},
+        {"id": "r2", "description": "His assigned period of guard duty continued for four hours.", "concept_label": "duty"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does watch denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a timepiece"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a period of guard duty"}
+      }
+    },
+    {
+      "id": "lexical_017",
+      "category": "lexical_ambiguity",
+      "sentence": "The palm was clearly visible.",
+      "readings": [
+        {"id": "r1", "description": "A palm tree was clearly visible.", "concept_label": "tree"},
+        {"id": "r2", "description": "The inner surface of a hand was clearly visible.", "concept_label": "hand"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does palm denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a tropical tree"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the inner surface of a hand"}
+      }
+    },
+    {
+      "id": "lexical_018",
+      "category": "lexical_ambiguity",
+      "sentence": "The pupil appeared unusually large.",
+      "readings": [
+        {"id": "r1", "description": "A school student appeared unusually large in body size.", "concept_label": "student"},
+        {"id": "r2", "description": "The dark opening in an eye was unusually dilated.", "concept_label": "eye"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does pupil denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a school student"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the opening in an eye"}
+      }
+    },
+    {
+      "id": "lexical_019",
+      "category": "lexical_ambiguity",
+      "sentence": "The organ was restored last year.",
+      "readings": [
+        {"id": "r1", "description": "A large keyboard instrument was restored.", "concept_label": "music"},
+        {"id": "r2", "description": "A biological body part was restored or transplanted.", "concept_label": "body"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does organ denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a keyboard instrument"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a biological body part"}
+      }
+    },
+    {
+      "id": "lexical_020",
+      "category": "lexical_ambiguity",
+      "sentence": "The bolt struck without warning.",
+      "readings": [
+        {"id": "r1", "description": "A flash of lightning struck without warning.", "concept_label": "lightning"},
+        {"id": "r2", "description": "A metal fastener or projectile struck something without warning.", "concept_label": "metal"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does bolt denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a flash of lightning"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a metal fastener or projectile"}
+      }
+    },
+    {
+      "id": "lexical_021",
+      "category": "lexical_ambiguity",
+      "sentence": "The scale looked shiny.",
+      "readings": [
+        {"id": "r1", "description": "A weighing instrument had a shiny surface.", "concept_label": "measure"},
+        {"id": "r2", "description": "A small plate from a fish or reptile looked shiny.", "concept_label": "fish"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does scale denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a weighing instrument"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a plate on a fish or reptile"}
+      }
+    },
+    {
+      "id": "lexical_022",
+      "category": "lexical_ambiguity",
+      "sentence": "The current was stronger than expected.",
+      "readings": [
+        {"id": "r1", "description": "The movement of water was stronger than expected.", "concept_label": "water"},
+        {"id": "r2", "description": "The flow of electricity was stronger than expected.", "concept_label": "electric"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does current denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "moving water"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "flowing electricity"}
+      }
+    },
+    {
+      "id": "lexical_023",
+      "category": "lexical_ambiguity",
+      "sentence": "The date was surprisingly sweet.",
+      "readings": [
+        {"id": "r1", "description": "A romantic outing was emotionally pleasant.", "concept_label": "romance"},
+        {"id": "r2", "description": "A date fruit had a sugary taste.", "concept_label": "fruit"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does date denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a romantic outing"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a fruit"}
+      }
+    },
+    {
+      "id": "lexical_024",
+      "category": "lexical_ambiguity",
+      "sentence": "The old port was famous.",
+      "readings": [
+        {"id": "r1", "description": "An old harbor town or facility was famous.", "concept_label": "harbor"},
+        {"id": "r2", "description": "An aged fortified wine was famous.", "concept_label": "wine"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does port denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a harbor"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a fortified wine"}
+      }
+    },
+    {
+      "id": "lexical_025",
+      "category": "lexical_ambiguity",
+      "sentence": "The glasses were left on the counter.",
+      "readings": [
+        {"id": "r1", "description": "Eyeglasses were left on the counter.", "concept_label": "vision"},
+        {"id": "r2", "description": "Drinking vessels were left on the counter.", "concept_label": "drinks"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does glasses denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "eyewear"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "drinking vessels"}
+      }
+    },
+    {
+      "id": "lexical_026",
+      "category": "lexical_ambiguity",
+      "sentence": "The cap was removed after the inspection.",
+      "readings": [
+        {"id": "r1", "description": "A hat or protective cover was physically removed.", "concept_label": "hat"},
+        {"id": "r2", "description": "An upper limit or restriction was abolished.", "concept_label": "limit"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does cap denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a hat or cover"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "an upper limit"}
+      }
+    },
+    {
+      "id": "lexical_027",
+      "category": "lexical_ambiguity",
+      "sentence": "The court was crowded that morning.",
+      "readings": [
+        {"id": "r1", "description": "A legal tribunal or courtroom was crowded.", "concept_label": "legal"},
+        {"id": "r2", "description": "A playing surface for a sport was crowded.", "concept_label": "sports"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does court denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a legal tribunal"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a sports surface"}
+      }
+    },
+    {
+      "id": "lexical_028",
+      "category": "lexical_ambiguity",
+      "sentence": "The pen was beside the shed.",
+      "readings": [
+        {"id": "r1", "description": "A writing instrument was beside the shed.", "concept_label": "writing"},
+        {"id": "r2", "description": "An enclosure for animals was beside the shed.", "concept_label": "animals"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does pen denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a writing instrument"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "an animal enclosure"}
+      }
+    },
+    {
+      "id": "lexical_029",
+      "category": "lexical_ambiguity",
+      "sentence": "They found the mine near the border.",
+      "readings": [
+        {"id": "r1", "description": "They found an excavation for extracting minerals.", "concept_label": "tunnel"},
+        {"id": "r2", "description": "They found a concealed explosive device.", "concept_label": "bomb"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does mine denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a mineral excavation"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "an explosive device"}
+      }
+    },
+    {
+      "id": "lexical_030",
+      "category": "lexical_ambiguity",
+      "sentence": "The mouse stopped moving.",
+      "readings": [
+        {"id": "r1", "description": "A small rodent stopped moving.", "concept_label": "animal"},
+        {"id": "r2", "description": "A computer pointing device stopped tracking movement.", "concept_label": "computer"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does mouse denote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "a small rodent"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "a computer pointing device"}
+      }
+    },
+    {
+      "id": "pp_attachment_001",
+      "category": "pp_attachment",
+      "sentence": "I saw the guard with the binoculars.",
+      "readings": [
+        {"id": "r1", "description": "I used binoculars to see the guard.", "concept_label": "instrument"},
+        {"id": "r2", "description": "I saw a guard who possessed binoculars.", "concept_label": "possession"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "How does with the binoculars attach?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the binoculars were used for seeing"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the guard had the binoculars"}
+      }
+    },
+    {
+      "id": "pp_attachment_002",
+      "category": "pp_attachment",
+      "sentence": "The photographer captured the tourist with the camera.",
+      "readings": [
+        {"id": "r1", "description": "The photographer used the camera to take the picture.", "concept_label": "instrument"},
+        {"id": "r2", "description": "The photographed tourist was carrying the camera.", "concept_label": "tourist"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who is associated with the camera?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the photographer used it"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the tourist carried it"}
+      }
+    },
+    {
+      "id": "pp_attachment_003",
+      "category": "pp_attachment",
+      "sentence": "Sara struck the intruder with the umbrella.",
+      "readings": [
+        {"id": "r1", "description": "Sara used the umbrella as the instrument of striking.", "concept_label": "weapon"},
+        {"id": "r2", "description": "Sara struck an intruder who was holding the umbrella.", "concept_label": "holding"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "How does with the umbrella attach?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "Sara used the umbrella to strike"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the intruder had the umbrella"}
+      }
+    },
+    {
+      "id": "pp_attachment_004",
+      "category": "pp_attachment",
+      "sentence": "The detective followed the suspect in the blue car.",
+      "readings": [
+        {"id": "r1", "description": "The detective was in the blue car while following.", "concept_label": "detective"},
+        {"id": "r2", "description": "The suspect being followed was in the blue car.", "concept_label": "suspect"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was in the blue car?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the detective"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the suspect"}
+      }
+    },
+    {
+      "id": "pp_attachment_005",
+      "category": "pp_attachment",
+      "sentence": "I watched the girl on the balcony.",
+      "readings": [
+        {"id": "r1", "description": "I was on the balcony while watching the girl.", "concept_label": "viewer"},
+        {"id": "r2", "description": "The girl I watched was on the balcony.", "concept_label": "girl"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was on the balcony?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the viewer"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the girl"}
+      }
+    },
+    {
+      "id": "pp_attachment_006",
+      "category": "pp_attachment",
+      "sentence": "I heard the musician in the hallway.",
+      "readings": [
+        {"id": "r1", "description": "I was in the hallway when I heard the musician.", "concept_label": "listener"},
+        {"id": "r2", "description": "The musician I heard was in the hallway.", "concept_label": "musician"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was in the hallway?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the listener"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the musician"}
+      }
+    },
+    {
+      "id": "pp_attachment_007",
+      "category": "pp_attachment",
+      "sentence": "The spy observed the courier near the fountain.",
+      "readings": [
+        {"id": "r1", "description": "The spy was near the fountain while observing.", "concept_label": "spy"},
+        {"id": "r2", "description": "The observed courier was near the fountain.", "concept_label": "courier"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was near the fountain?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the spy"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the courier"}
+      }
+    },
+    {
+      "id": "pp_attachment_008",
+      "category": "pp_attachment",
+      "sentence": "The officer stopped the driver with the red flag.",
+      "readings": [
+        {"id": "r1", "description": "The officer used a red flag as a signal to stop the driver.", "concept_label": "signal"},
+        {"id": "r2", "description": "The officer stopped a driver who possessed a red flag.", "concept_label": "driver"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who used or had the red flag?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the officer used it as a signal"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the driver had it"}
+      }
+    },
+    {
+      "id": "pp_attachment_009",
+      "category": "pp_attachment",
+      "sentence": "Maya greeted the guest in the silk robe.",
+      "readings": [
+        {"id": "r1", "description": "Maya was wearing the silk robe when she greeted the guest.", "concept_label": "host"},
+        {"id": "r2", "description": "The guest whom Maya greeted was wearing the silk robe.", "concept_label": "guest"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who wore the silk robe?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "Maya"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the guest"}
+      }
+    },
+    {
+      "id": "pp_attachment_010",
+      "category": "pp_attachment",
+      "sentence": "Riley called the doctor from the office.",
+      "readings": [
+        {"id": "r1", "description": "Riley made the call while Riley was in the office.", "concept_label": "caller"},
+        {"id": "r2", "description": "Riley called a doctor who was at or associated with the office.", "concept_label": "doctor"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was at the office?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "Riley, the caller"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the doctor"}
+      }
+    },
+    {
+      "id": "pp_attachment_011",
+      "category": "pp_attachment",
+      "sentence": "Pat emailed the client from Paris.",
+      "readings": [
+        {"id": "r1", "description": "Pat sent the email while Pat was in Paris.", "concept_label": "sender"},
+        {"id": "r2", "description": "The client whom Pat emailed was from Paris.", "concept_label": "client"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was in or from Paris?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "Pat, the sender"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the client"}
+      }
+    },
+    {
+      "id": "pp_attachment_012",
+      "category": "pp_attachment",
+      "sentence": "Jordan spoke to the assistant in the laboratory.",
+      "readings": [
+        {"id": "r1", "description": "Jordan was in the laboratory while speaking.", "concept_label": "speaker"},
+        {"id": "r2", "description": "The assistant Jordan spoke to was in the laboratory.", "concept_label": "assistant"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was in the laboratory?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "Jordan, the speaker"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the assistant"}
+      }
+    },
+    {
+      "id": "pp_attachment_013",
+      "category": "pp_attachment",
+      "sentence": "Robin waved to the neighbor on the balcony.",
+      "readings": [
+        {"id": "r1", "description": "Robin was on the balcony while waving.", "concept_label": "self"},
+        {"id": "r2", "description": "The neighbor receiving the wave was on the balcony.", "concept_label": "neighbor"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was on the balcony?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "Robin"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the neighbor"}
+      }
+    },
+    {
+      "id": "pp_attachment_014",
+      "category": "pp_attachment",
+      "sentence": "Leslie interviewed the witness from the balcony.",
+      "readings": [
+        {"id": "r1", "description": "Leslie conducted the interview while Leslie was on the balcony.", "concept_label": "interviewer"},
+        {"id": "r2", "description": "The witness being interviewed was on the balcony.", "concept_label": "witness"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was on the balcony?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "Leslie, the interviewer"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the witness"}
+      }
+    },
+    {
+      "id": "pp_attachment_015",
+      "category": "pp_attachment",
+      "sentence": "Morgan discussed the friend at the airport.",
+      "readings": [
+        {"id": "r1", "description": "Morgan held the discussion while Morgan was at the airport.", "concept_label": "speaker"},
+        {"id": "r2", "description": "The discussion concerned a friend who was at the airport.", "concept_label": "friend"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "How does at the airport attach?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "it locates Morgan's discussion"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "it identifies the friend at the airport"}
+      }
+    },
+    {
+      "id": "pp_attachment_016",
+      "category": "pp_attachment",
+      "sentence": "The reporter described the attack on television.",
+      "readings": [
+        {"id": "r1", "description": "The reporter's description was broadcast on television.", "concept_label": "broadcast"},
+        {"id": "r2", "description": "The attack being described occurred or appeared on television.", "concept_label": "event"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What was on television?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the reporter's description"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the attack"}
+      }
+    },
+    {
+      "id": "pp_attachment_017",
+      "category": "pp_attachment",
+      "sentence": "The company announced the merger in April.",
+      "readings": [
+        {"id": "r1", "description": "The announcement was made in April.", "concept_label": "announcement"},
+        {"id": "r2", "description": "The merger was scheduled or occurred in April.", "concept_label": "merger"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does in April date?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the announcement"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the merger"}
+      }
+    },
+    {
+      "id": "pp_attachment_018",
+      "category": "pp_attachment",
+      "sentence": "The captain reported the accident on Tuesday.",
+      "readings": [
+        {"id": "r1", "description": "The captain made the report on Tuesday.", "concept_label": "report"},
+        {"id": "r2", "description": "The accident happened on Tuesday.", "concept_label": "accident"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does on Tuesday date?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the reporting"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the accident"}
+      }
+    },
+    {
+      "id": "pp_attachment_019",
+      "category": "pp_attachment",
+      "sentence": "The committee delayed the vote on Monday.",
+      "readings": [
+        {"id": "r1", "description": "The act of delaying occurred on Monday.", "concept_label": "delay"},
+        {"id": "r2", "description": "The vote that was delayed had been scheduled for Monday.", "concept_label": "vote"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does on Monday date?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the committee's delay"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the scheduled vote"}
+      }
+    },
+    {
+      "id": "pp_attachment_020",
+      "category": "pp_attachment",
+      "sentence": "The scientist reviewed the forecast for June.",
+      "readings": [
+        {"id": "r1", "description": "The review was intended or scheduled for June.", "concept_label": "review"},
+        {"id": "r2", "description": "The forecast concerned conditions expected in June.", "concept_label": "forecast"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "How does for June attach?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "it dates or motivates the review"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "it specifies the forecast's month"}
+      }
+    },
+    {
+      "id": "pp_attachment_021",
+      "category": "pp_attachment",
+      "sentence": "She remembered the lecture in Boston.",
+      "readings": [
+        {"id": "r1", "description": "She was in Boston when she remembered the lecture.", "concept_label": "memory"},
+        {"id": "r2", "description": "The lecture she remembered had taken place in Boston.", "concept_label": "lecture"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What was located in Boston?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the act of remembering"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the lecture"}
+      }
+    },
+    {
+      "id": "pp_attachment_022",
+      "category": "pp_attachment",
+      "sentence": "The editor reviewed the letter from Rome.",
+      "readings": [
+        {"id": "r1", "description": "The editor reviewed the letter while working from Rome.", "concept_label": "editor"},
+        {"id": "r2", "description": "The letter originated in Rome.", "concept_label": "origin"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "How does from Rome attach?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "it locates the editor during the review"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "it gives the letter's origin"}
+      }
+    },
+    {
+      "id": "pp_attachment_023",
+      "category": "pp_attachment",
+      "sentence": "The memo about the meeting on Friday was brief.",
+      "readings": [
+        {"id": "r1", "description": "The memo was issued, written, or relevant on Friday.", "concept_label": "memo"},
+        {"id": "r2", "description": "The meeting discussed in the memo was scheduled for Friday.", "concept_label": "meeting"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What does on Friday date?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the memo"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the meeting"}
+      }
+    },
+    {
+      "id": "pp_attachment_024",
+      "category": "pp_attachment",
+      "sentence": "The note about the package on the desk disappeared.",
+      "readings": [
+        {"id": "r1", "description": "The note was on the desk before it disappeared.", "concept_label": "note"},
+        {"id": "r2", "description": "The package mentioned by the note was on the desk.", "concept_label": "package"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What was on the desk?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the note"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the package"}
+      }
+    },
+    {
+      "id": "pp_attachment_025",
+      "category": "pp_attachment",
+      "sentence": "The photograph of the children by the fountain was torn.",
+      "readings": [
+        {"id": "r1", "description": "The physical photograph was located by the fountain.", "concept_label": "photo"},
+        {"id": "r2", "description": "The children depicted in the photograph were by the fountain.", "concept_label": "children"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What was by the fountain?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the physical photograph"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the depicted children"}
+      }
+    },
+    {
+      "id": "pp_attachment_026",
+      "category": "pp_attachment",
+      "sentence": "The painting of the ship in the gallery was stolen.",
+      "readings": [
+        {"id": "r1", "description": "The painting was displayed in the gallery.", "concept_label": "painting"},
+        {"id": "r2", "description": "The painting depicted a ship located in a gallery.", "concept_label": "ship"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What was in the gallery?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the painting"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the depicted ship"}
+      }
+    },
+    {
+      "id": "pp_attachment_027",
+      "category": "pp_attachment",
+      "sentence": "The daughter of the nurse with curly hair arrived.",
+      "readings": [
+        {"id": "r1", "description": "The daughter had curly hair.", "concept_label": "daughter"},
+        {"id": "r2", "description": "The nurse had curly hair.", "concept_label": "nurse"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who had curly hair?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the daughter"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the nurse"}
+      }
+    },
+    {
+      "id": "pp_attachment_028",
+      "category": "pp_attachment",
+      "sentence": "The assistant to the professor with the award resigned.",
+      "readings": [
+        {"id": "r1", "description": "The assistant had received or possessed the award.", "concept_label": "assistant"},
+        {"id": "r2", "description": "The professor had received or possessed the award.", "concept_label": "professor"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who had the award?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the assistant"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the professor"}
+      }
+    },
+    {
+      "id": "pp_attachment_029",
+      "category": "pp_attachment",
+      "sentence": "The neighbor of the singer with the dog waved.",
+      "readings": [
+        {"id": "r1", "description": "The neighbor was accompanied by or owned the dog.", "concept_label": "neighbor"},
+        {"id": "r2", "description": "The singer was accompanied by or owned the dog.", "concept_label": "singer"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who had the dog?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the neighbor"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the singer"}
+      }
+    },
+    {
+      "id": "pp_attachment_030",
+      "category": "pp_attachment",
+      "sentence": "The friend of the baker from Madrid called.",
+      "readings": [
+        {"id": "r1", "description": "The friend was from Madrid.", "concept_label": "friend"},
+        {"id": "r2", "description": "The baker was from Madrid.", "concept_label": "baker"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was from Madrid?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the friend"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the baker"}
+      }
+    },
+    {
+      "id": "garden_path_001",
+      "category": "garden_path",
+      "construction": "reduced_relative",
+      "sentence": "The mare raced past the stable stumbled near the gate.",
+      "readings": [
+        {"id": "r1", "description": "The mare that someone raced past the stable later stumbled.", "concept_label": "passive"},
+        {"id": "r2", "description": "The mare itself raced past the stable, the initially preferred main-verb analysis.", "concept_label": "active"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What role does the mare have in raced?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the mare was raced by someone"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the mare did the racing"}
+      }
+    },
+    {
+      "id": "garden_path_002",
+      "category": "garden_path",
+      "construction": "reduced_relative",
+      "sentence": "The defendant examined by the solicitor appeared uneasy.",
+      "readings": [
+        {"id": "r1", "description": "The defendant was examined by the solicitor and appeared uneasy.", "concept_label": "passive"},
+        {"id": "r2", "description": "The defendant examined someone, the temporary main-verb analysis before by forces revision.", "concept_label": "active"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What role does the defendant have in examined?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the defendant received the examination"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the defendant performed an examination"}
+      }
+    },
+    {
+      "id": "garden_path_003",
+      "category": "garden_path",
+      "construction": "reduced_relative",
+      "sentence": "The soldiers warned about the avalanche conducted the rescue.",
+      "readings": [
+        {"id": "r1", "description": "The soldiers who had been warned about the avalanche conducted the rescue.", "concept_label": "passive"},
+        {"id": "r2", "description": "The soldiers warned other people about the avalanche, the temporary active analysis.", "concept_label": "active"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What role do the soldiers have in warned?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "they received a warning"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "they issued a warning"}
+      }
+    },
+    {
+      "id": "garden_path_004",
+      "category": "garden_path",
+      "construction": "reduced_relative",
+      "sentence": "The patient sent to the clinic arrived after noon.",
+      "readings": [
+        {"id": "r1", "description": "The patient was sent to the clinic and later arrived.", "concept_label": "passive"},
+        {"id": "r2", "description": "The patient sent something to the clinic, the temporary main-verb analysis.", "concept_label": "active"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What role does the patient have in sent?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the patient was sent"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the patient sent something"}
+      }
+    },
+    {
+      "id": "garden_path_005",
+      "category": "garden_path",
+      "construction": "reduced_relative",
+      "sentence": "The suspect questioned in the corridor confessed immediately.",
+      "readings": [
+        {"id": "r1", "description": "The suspect was questioned in the corridor and then confessed.", "concept_label": "passive"},
+        {"id": "r2", "description": "The suspect questioned another person, the temporary main-verb analysis.", "concept_label": "active"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What role does the suspect have in questioned?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the suspect received questioning"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the suspect asked the questions"}
+      }
+    },
+    {
+      "id": "garden_path_006",
+      "category": "garden_path",
+      "construction": "reduced_relative",
+      "sentence": "The dog walked around the park collapsed at home.",
+      "readings": [
+        {"id": "r1", "description": "The dog that someone walked around the park later collapsed.", "concept_label": "passive"},
+        {"id": "r2", "description": "The dog walked itself around the park, the temporary main-verb analysis.", "concept_label": "active"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What role does the dog have in walked?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "someone walked the dog"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the dog walked on its own"}
+      }
+    },
+    {
+      "id": "garden_path_007",
+      "category": "garden_path",
+      "construction": "reduced_relative",
+      "sentence": "The messenger sent to the office vanished overnight.",
+      "readings": [
+        {"id": "r1", "description": "The messenger was sent to the office and later vanished.", "concept_label": "passive"},
+        {"id": "r2", "description": "The messenger sent something to the office, the temporary active analysis.", "concept_label": "active"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What role does the messenger have in sent?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the messenger was sent"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the messenger sent something"}
+      }
+    },
+    {
+      "id": "garden_path_008",
+      "category": "garden_path",
+      "construction": "reduced_relative",
+      "sentence": "The student taught by the tutor passed easily.",
+      "readings": [
+        {"id": "r1", "description": "The student was taught by the tutor and passed.", "concept_label": "passive"},
+        {"id": "r2", "description": "The student taught someone, the temporary main-verb analysis before by.", "concept_label": "active"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What role does the student have in taught?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the student received teaching"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the student did the teaching"}
+      }
+    },
+    {
+      "id": "garden_path_009",
+      "category": "garden_path",
+      "construction": "reduced_relative",
+      "sentence": "The child dressed in the bedroom complained about the costume.",
+      "readings": [
+        {"id": "r1", "description": "Someone dressed the child in the bedroom; that child later complained.", "concept_label": "passive"},
+        {"id": "r2", "description": "The child dressed themself in the bedroom before complaining.", "concept_label": "active"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What role does the child have in dressed?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "someone dressed the child"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the child dressed themself"}
+      }
+    },
+    {
+      "id": "garden_path_010",
+      "category": "garden_path",
+      "construction": "reduced_relative",
+      "sentence": "The actor photographed on the stage smiled at the crowd.",
+      "readings": [
+        {"id": "r1", "description": "The actor was photographed on the stage and then smiled.", "concept_label": "passive"},
+        {"id": "r2", "description": "The actor took photographs on the stage, the temporary active analysis.", "concept_label": "active"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What role does the actor have in photographed?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the actor was photographed"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the actor took photographs"}
+      }
+    },
+    {
+      "id": "garden_path_011",
+      "category": "garden_path",
+      "construction": "np_z",
+      "sentence": "While the seamstress dressed the baby played in the crib.",
+      "readings": [
+        {"id": "r1", "description": "The seamstress dressed themself; the baby was the subject of played.", "concept_label": "subject"},
+        {"id": "r2", "description": "The seamstress dressed the baby, the initially preferred object analysis.", "concept_label": "object"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What grammatical role does the baby have?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "subject of played"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "object of dressed"}
+      }
+    },
+    {
+      "id": "garden_path_012",
+      "category": "garden_path",
+      "construction": "np_z",
+      "sentence": "While the ranger hunted the deer ran into the clearing.",
+      "readings": [
+        {"id": "r1", "description": "The ranger hunted unspecified prey; the deer was the subject of ran.", "concept_label": "subject"},
+        {"id": "r2", "description": "The ranger hunted the deer, the initially preferred object analysis.", "concept_label": "object"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What grammatical role does the deer have?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "subject of ran"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "object of hunted"}
+      }
+    },
+    {
+      "id": "garden_path_013",
+      "category": "garden_path",
+      "construction": "np_z",
+      "sentence": "As the chef cooked the onions burned on the stove.",
+      "readings": [
+        {"id": "r1", "description": "The chef cooked something else; the onions were the subject of burned.", "concept_label": "subject"},
+        {"id": "r2", "description": "The chef cooked the onions, the initially preferred object analysis.", "concept_label": "object"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What grammatical role do the onions have?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "subject of burned"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "object of cooked"}
+      }
+    },
+    {
+      "id": "garden_path_014",
+      "category": "garden_path",
+      "construction": "np_z",
+      "sentence": "While the parents watched the child sang in the choir.",
+      "readings": [
+        {"id": "r1", "description": "The parents watched generally; the child was the subject of sang.", "concept_label": "subject"},
+        {"id": "r2", "description": "The parents watched the child, the initially preferred object analysis.", "concept_label": "object"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What grammatical role does the child have?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "subject of sang"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "object of watched"}
+      }
+    },
+    {
+      "id": "garden_path_015",
+      "category": "garden_path",
+      "construction": "np_z",
+      "sentence": "Before the guard questioned the prisoner escaped through the window.",
+      "readings": [
+        {"id": "r1", "description": "The guard questioned someone else; the prisoner was the subject of escaped.", "concept_label": "subject"},
+        {"id": "r2", "description": "The guard questioned the prisoner, the initially preferred object analysis.", "concept_label": "object"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What grammatical role does the prisoner have?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "subject of escaped"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "object of questioned"}
+      }
+    },
+    {
+      "id": "garden_path_016",
+      "category": "garden_path",
+      "construction": "np_z",
+      "sentence": "When the instructor lectured the student yawned loudly.",
+      "readings": [
+        {"id": "r1", "description": "The instructor lectured generally; the student was the subject of yawned.", "concept_label": "subject"},
+        {"id": "r2", "description": "The instructor lectured the student, the initially preferred object analysis.", "concept_label": "object"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What grammatical role does the student have?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "subject of yawned"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "object of lectured"}
+      }
+    },
+    {
+      "id": "garden_path_017",
+      "category": "garden_path",
+      "construction": "np_z",
+      "sentence": "While the pilot trained the crew rested below deck.",
+      "readings": [
+        {"id": "r1", "description": "The pilot trained; the crew was the subject of rested.", "concept_label": "subject"},
+        {"id": "r2", "description": "The pilot trained the crew, the initially preferred object analysis.", "concept_label": "object"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What grammatical role does the crew have?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "subject of rested"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "object of trained"}
+      }
+    },
+    {
+      "id": "garden_path_018",
+      "category": "garden_path",
+      "construction": "np_z",
+      "sentence": "As the gardener watered the roses wilted in the heat.",
+      "readings": [
+        {"id": "r1", "description": "The gardener watered something else; the roses were the subject of wilted.", "concept_label": "subject"},
+        {"id": "r2", "description": "The gardener watered the roses, the initially preferred object analysis.", "concept_label": "object"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What grammatical role do the roses have?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "subject of wilted"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "object of watered"}
+      }
+    },
+    {
+      "id": "garden_path_019",
+      "category": "garden_path",
+      "construction": "np_z",
+      "sentence": "While the reporter interviewed the senator laughed at the commotion.",
+      "readings": [
+        {"id": "r1", "description": "The reporter interviewed someone else; the senator was the subject of laughed.", "concept_label": "subject"},
+        {"id": "r2", "description": "The reporter interviewed the senator, the initially preferred object analysis.", "concept_label": "object"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What grammatical role does the senator have?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "subject of laughed"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "object of interviewed"}
+      }
+    },
+    {
+      "id": "garden_path_020",
+      "category": "garden_path",
+      "construction": "np_z",
+      "sentence": "When the doctor examined the patient sneezed twice.",
+      "readings": [
+        {"id": "r1", "description": "The doctor examined someone else; the patient was the subject of sneezed.", "concept_label": "subject"},
+        {"id": "r2", "description": "The doctor examined the patient, the initially preferred object analysis.", "concept_label": "object"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What grammatical role does the patient have?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "subject of sneezed"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "object of examined"}
+      }
+    },
+    {
+      "id": "garden_path_021",
+      "category": "garden_path",
+      "construction": "gerund_participle",
+      "sentence": "Visiting relatives can be exhausting.",
+      "readings": [
+        {"id": "r1", "description": "The activity of going to see one's relatives can be exhausting.", "concept_label": "visiting"},
+        {"id": "r2", "description": "Relatives who are visiting can be exhausting company.", "concept_label": "guests"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What is described as exhausting?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the activity of visiting relatives"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "relatives who are visiting"}
+      }
+    },
+    {
+      "id": "garden_path_022",
+      "category": "garden_path",
+      "construction": "gerund_participle",
+      "sentence": "Flying planes can be risky.",
+      "readings": [
+        {"id": "r1", "description": "The activity of piloting planes can be risky.", "concept_label": "pilot"},
+        {"id": "r2", "description": "Planes that are airborne can be risky.", "concept_label": "aircraft"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What is described as risky?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the activity of piloting planes"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "planes that are airborne"}
+      }
+    },
+    {
+      "id": "garden_path_023",
+      "category": "garden_path",
+      "construction": "gerund_participle",
+      "sentence": "Hunting dogs can be dangerous.",
+      "readings": [
+        {"id": "r1", "description": "The activity of hunting dogs can be dangerous.", "concept_label": "pursuit"},
+        {"id": "r2", "description": "Dogs trained or engaged in hunting can be dangerous.", "concept_label": "dogs"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What is described as dangerous?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the activity of hunting dogs"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "dogs that hunt"}
+      }
+    },
+    {
+      "id": "garden_path_024",
+      "category": "garden_path",
+      "construction": "gerund_participle",
+      "sentence": "Teaching assistants can be demanding.",
+      "readings": [
+        {"id": "r1", "description": "The activity of teaching assistants can demand substantial effort.", "concept_label": "teaching"},
+        {"id": "r2", "description": "People with the job title teaching assistant can be demanding.", "concept_label": "assistants"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What is described as demanding?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the activity of teaching assistants"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "assistants who teach"}
+      }
+    },
+    {
+      "id": "garden_path_025",
+      "category": "garden_path",
+      "construction": "gerund_participle",
+      "sentence": "Shooting stars can be spectacular.",
+      "readings": [
+        {"id": "r1", "description": "The act of photographing or firing at famous performers can be spectacular.", "concept_label": "shooting"},
+        {"id": "r2", "description": "Meteors commonly called shooting stars can be spectacular.", "concept_label": "space"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What is described as spectacular?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the act of shooting famous performers"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "meteors in the night sky"}
+      }
+    },
+    {
+      "id": "garden_path_026",
+      "category": "garden_path",
+      "construction": "gerund_participle",
+      "sentence": "Training officers can be expensive.",
+      "readings": [
+        {"id": "r1", "description": "The activity of training officers can be expensive.", "concept_label": "training"},
+        {"id": "r2", "description": "Officers who are currently in training can be expensive to support.", "concept_label": "officers"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What is described as expensive?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the activity of training officers"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "officers who are trainees"}
+      }
+    },
+    {
+      "id": "garden_path_027",
+      "category": "garden_path",
+      "construction": "gerund_participle",
+      "sentence": "Serving judges can be demanding.",
+      "readings": [
+        {"id": "r1", "description": "The activity of providing service to judges can be demanding.", "concept_label": "service"},
+        {"id": "r2", "description": "Judges who currently hold office can be demanding people.", "concept_label": "judges"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What is described as demanding?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the activity of serving judges"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "judges who currently serve"}
+      }
+    },
+    {
+      "id": "garden_path_028",
+      "category": "garden_path",
+      "construction": "gerund_participle",
+      "sentence": "Supporting actors can be difficult.",
+      "readings": [
+        {"id": "r1", "description": "The activity of giving help or resources to actors can be difficult.", "concept_label": "helping"},
+        {"id": "r2", "description": "Performers in supporting roles can be difficult people.", "concept_label": "actors"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What is described as difficult?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the activity of supporting actors"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "actors in supporting roles"}
+      }
+    },
+    {
+      "id": "garden_path_029",
+      "category": "garden_path",
+      "construction": "gerund_participle",
+      "sentence": "Changing rooms can be confusing.",
+      "readings": [
+        {"id": "r1", "description": "The activity of altering rooms can be confusing.", "concept_label": "altering"},
+        {"id": "r2", "description": "Rooms intended for changing clothes can be confusing.", "concept_label": "dressing"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What is described as confusing?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the activity of altering rooms"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "rooms for changing clothes"}
+      }
+    },
+    {
+      "id": "garden_path_030",
+      "category": "garden_path",
+      "construction": "gerund_participle",
+      "sentence": "Folding chairs can be frustrating.",
+      "readings": [
+        {"id": "r1", "description": "The activity of folding chairs can be frustrating.", "concept_label": "folding"},
+        {"id": "r2", "description": "Chairs designed to fold can be frustrating furniture.", "concept_label": "furniture"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "What is described as frustrating?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the activity of folding chairs"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "chairs designed to fold"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_001",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_subject",
+      "sentence": "The doctor called the teacher because they were worried.",
+      "readings": [
+        {"id": "r1", "description": "The doctor was worried and therefore made the call.", "concept_label": "doctor"},
+        {"id": "r2", "description": "The teacher was worried, prompting the doctor's call.", "concept_label": "teacher"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was worried?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the doctor"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the teacher"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_002",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_subject",
+      "sentence": "The lawyer thanked the clerk after they found the missing file.",
+      "readings": [
+        {"id": "r1", "description": "The lawyer found the missing file before giving thanks.", "concept_label": "lawyer"},
+        {"id": "r2", "description": "The clerk found the missing file and was thanked.", "concept_label": "clerk"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who found the missing file?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the lawyer"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the clerk"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_003",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_subject",
+      "sentence": "The baker visited the farmer while they repaired the fence.",
+      "readings": [
+        {"id": "r1", "description": "The baker repaired the fence during the visit.", "concept_label": "baker"},
+        {"id": "r2", "description": "The farmer repaired the fence during the baker's visit.", "concept_label": "farmer"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who repaired the fence?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the baker"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the farmer"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_004",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_subject",
+      "sentence": "The pilot texted the mechanic before they boarded the plane.",
+      "readings": [
+        {"id": "r1", "description": "The pilot boarded the plane after sending the text.", "concept_label": "pilot"},
+        {"id": "r2", "description": "The mechanic boarded the plane after receiving the text.", "concept_label": "mechanic"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who boarded the plane?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the pilot"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the mechanic"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_005",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_subject",
+      "sentence": "The artist met the critic after they returned from Paris.",
+      "readings": [
+        {"id": "r1", "description": "The artist returned from Paris before the meeting.", "concept_label": "artist"},
+        {"id": "r2", "description": "The critic returned from Paris before the meeting.", "concept_label": "critic"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who returned from Paris?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the artist"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the critic"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_006",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_subject",
+      "sentence": "The coach spoke to the captain when they lost the match.",
+      "readings": [
+        {"id": "r1", "description": "The coach lost the match and then spoke to the captain.", "concept_label": "coach"},
+        {"id": "r2", "description": "The captain lost the match and was addressed by the coach.", "concept_label": "captain"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who lost the match?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the coach"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the captain"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_007",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_subject",
+      "sentence": "The nurse comforted the patient because they were crying.",
+      "readings": [
+        {"id": "r1", "description": "The nurse was crying while comforting the patient.", "concept_label": "nurse"},
+        {"id": "r2", "description": "The patient was crying and therefore received comfort.", "concept_label": "patient"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who was crying?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the nurse"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the patient"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_008",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_subject",
+      "sentence": "The editor emailed the author once they finished the revision.",
+      "readings": [
+        {"id": "r1", "description": "The editor finished the revision and then sent the email.", "concept_label": "editor"},
+        {"id": "r2", "description": "The author finished the revision and then received the email.", "concept_label": "author"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who finished the revision?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the editor"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the author"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_009",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_subject",
+      "sentence": "The detective watched the courier until they entered the hotel.",
+      "readings": [
+        {"id": "r1", "description": "The detective entered the hotel while monitoring the courier.", "concept_label": "detective"},
+        {"id": "r2", "description": "The courier entered the hotel while being watched.", "concept_label": "courier"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who entered the hotel?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the detective"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the courier"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_010",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_subject",
+      "sentence": "The scientist phoned the journalist after they read the report.",
+      "readings": [
+        {"id": "r1", "description": "The scientist read the report before making the call.", "concept_label": "scientist"},
+        {"id": "r2", "description": "The journalist read the report before receiving the call.", "concept_label": "journalist"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Who read the report?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the scientist"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the journalist"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_011",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_possessive",
+      "sentence": "The chef congratulated the server because their recipe won the contest.",
+      "readings": [
+        {"id": "r1", "description": "The chef's recipe won the contest.", "concept_label": "chef"},
+        {"id": "r2", "description": "The server's recipe won the contest.", "concept_label": "server"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whose recipe won the contest?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the chef's"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the server's"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_012",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_possessive",
+      "sentence": "The librarian reminded the student that their book was overdue.",
+      "readings": [
+        {"id": "r1", "description": "A book belonging to the librarian was overdue.", "concept_label": "librarian"},
+        {"id": "r2", "description": "A book borrowed or owned by the student was overdue.", "concept_label": "student"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whose book was overdue?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the librarian's"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the student's"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_013",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_possessive",
+      "sentence": "The manager warned the assistant that their train might be late.",
+      "readings": [
+        {"id": "r1", "description": "The manager's train might be late.", "concept_label": "manager"},
+        {"id": "r2", "description": "The assistant's train might be late.", "concept_label": "assistant"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whose train might be late?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the manager's"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the assistant's"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_014",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_possessive",
+      "sentence": "The architect consulted the builder before their presentation.",
+      "readings": [
+        {"id": "r1", "description": "The consultation occurred before the architect's presentation.", "concept_label": "architect"},
+        {"id": "r2", "description": "The consultation occurred before the builder's presentation.", "concept_label": "builder"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whose presentation was approaching?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the architect's"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the builder's"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_015",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_possessive",
+      "sentence": "The musician called the producer when their album reached the charts.",
+      "readings": [
+        {"id": "r1", "description": "The musician's album reached the charts.", "concept_label": "musician"},
+        {"id": "r2", "description": "The producer's album reached the charts.", "concept_label": "producer"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whose album reached the charts?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the musician's"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the producer's"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_016",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_possessive",
+      "sentence": "The gardener asked the neighbor whether their plants needed water.",
+      "readings": [
+        {"id": "r1", "description": "The gardener asked about the gardener's own plants.", "concept_label": "garden"},
+        {"id": "r2", "description": "The gardener asked about the neighbor's plants.", "concept_label": "neighbor"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whose plants might need water?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the gardener's"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the neighbor's"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_017",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_possessive",
+      "sentence": "The professor told the dean that their request needed review.",
+      "readings": [
+        {"id": "r1", "description": "A request made by the professor needed review.", "concept_label": "professor"},
+        {"id": "r2", "description": "A request made by the dean needed review.", "concept_label": "dean"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whose request needed review?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the professor's"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the dean's"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_018",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_possessive",
+      "sentence": "The reporter questioned the senator after their resignation.",
+      "readings": [
+        {"id": "r1", "description": "The questioning happened after the reporter resigned.", "concept_label": "reporter"},
+        {"id": "r2", "description": "The questioning happened after the senator resigned.", "concept_label": "senator"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whose resignation preceded the questioning?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the reporter's"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the senator's"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_019",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_possessive",
+      "sentence": "The parent scolded the babysitter because their alarm had failed.",
+      "readings": [
+        {"id": "r1", "description": "The parent's alarm had failed.", "concept_label": "parent"},
+        {"id": "r2", "description": "The babysitter's alarm had failed.", "concept_label": "nanny"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whose alarm had failed?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the parent's"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the babysitter's"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_020",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_possessive",
+      "sentence": "The firefighter carried the hiker until their breathing stabilized.",
+      "readings": [
+        {"id": "r1", "description": "The firefighter's breathing stabilized while carrying the hiker.", "concept_label": "firefighter"},
+        {"id": "r2", "description": "The hiker's breathing stabilized while being carried.", "concept_label": "traveler"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whose breathing stabilized?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the firefighter's"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the hiker's"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_021",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_object",
+      "sentence": "The therapist told the client that the receptionist would call them.",
+      "readings": [
+        {"id": "r1", "description": "The receptionist would call the therapist.", "concept_label": "therapist"},
+        {"id": "r2", "description": "The receptionist would call the client.", "concept_label": "client"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whom would the receptionist call?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the therapist"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the client"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_022",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_object",
+      "sentence": "The judge informed the witness that the clerk would escort them.",
+      "readings": [
+        {"id": "r1", "description": "The clerk would escort the judge.", "concept_label": "judge"},
+        {"id": "r2", "description": "The clerk would escort the witness.", "concept_label": "witness"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whom would the clerk escort?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the judge"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the witness"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_023",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_object",
+      "sentence": "The surgeon told the resident that the director had selected them.",
+      "readings": [
+        {"id": "r1", "description": "The director had selected the surgeon.", "concept_label": "surgeon"},
+        {"id": "r2", "description": "The director had selected the resident.", "concept_label": "resident"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whom had the director selected?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the surgeon"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the resident"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_024",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_object",
+      "sentence": "The owner told the plumber that the tenant would meet them.",
+      "readings": [
+        {"id": "r1", "description": "The tenant would meet the owner.", "concept_label": "owner"},
+        {"id": "r2", "description": "The tenant would meet the plumber.", "concept_label": "plumber"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whom would the tenant meet?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the owner"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the plumber"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_025",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_object",
+      "sentence": "The director told the actor that the producer would contact them.",
+      "readings": [
+        {"id": "r1", "description": "The producer would contact the director.", "concept_label": "director"},
+        {"id": "r2", "description": "The producer would contact the actor.", "concept_label": "actor"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whom would the producer contact?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the director"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the actor"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_026",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_object",
+      "sentence": "The engineer told the designer that the manager would promote them.",
+      "readings": [
+        {"id": "r1", "description": "The manager would promote the engineer.", "concept_label": "engineer"},
+        {"id": "r2", "description": "The manager would promote the designer.", "concept_label": "designer"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whom would the manager promote?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the engineer"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the designer"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_027",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_object",
+      "sentence": "The dentist told the patient that the receptionist would remind them.",
+      "readings": [
+        {"id": "r1", "description": "The receptionist would remind the dentist.", "concept_label": "dentist"},
+        {"id": "r2", "description": "The receptionist would remind the patient.", "concept_label": "patient"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whom would the receptionist remind?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the dentist"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the patient"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_028",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_object",
+      "sentence": "The curator told the collector that the guard would accompany them.",
+      "readings": [
+        {"id": "r1", "description": "The guard would accompany the curator.", "concept_label": "curator"},
+        {"id": "r2", "description": "The guard would accompany the collector.", "concept_label": "collector"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whom would the guard accompany?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the curator"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the collector"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_029",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_object",
+      "sentence": "The mayor told the activist that the reporter would interview them.",
+      "readings": [
+        {"id": "r1", "description": "The reporter would interview the mayor.", "concept_label": "mayor"},
+        {"id": "r2", "description": "The reporter would interview the activist.", "concept_label": "activist"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whom would the reporter interview?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the mayor"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the activist"}
+      }
+    },
+    {
+      "id": "ambiguous_pronoun_030",
+      "category": "ambiguous_pronoun",
+      "construction": "singular_they_object",
+      "sentence": "The accountant told the client that the auditor would question them.",
+      "readings": [
+        {"id": "r1", "description": "The auditor would question the accountant.", "concept_label": "accountant"},
+        {"id": "r2", "description": "The auditor would question the client.", "concept_label": "client"}
+      ],
+      "behavior_probe": {
+        "type": "forced_choice",
+        "question": "Whom would the auditor question?",
+        "target": {"reading_id": "r1", "token_label": "A", "choice": "the accountant"},
+        "foil": {"reading_id": "r2", "token_label": "B", "choice": "the client"}
+      }
+    }
+  ]
+}

@@ -3,7 +3,12 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from src.metrics import logit_difference, partial_correlation, standardized_regression
+from src.metrics import (
+    logit_difference,
+    partial_correlation,
+    standardized_regression,
+    standardized_regression_with_ci,
+)
 
 
 def test_logit_difference_sign() -> None:
@@ -33,3 +38,19 @@ def test_standardized_regression_returns_named_coefficients() -> None:
     assert set(result["coefficients"]) == {"intercept", "write", "read"}
     assert result["r_squared"] > 0.999
 
+
+def test_standardized_regression_bootstrap_intervals_cover_signal() -> None:
+    rng = np.random.default_rng(19)
+    write = rng.normal(size=80)
+    read = rng.normal(size=80)
+    causal = 0.1 * write + 1.2 * read + rng.normal(scale=0.2, size=80)
+    result = standardized_regression_with_ci(
+        causal,
+        write,
+        read,
+        n_bootstrap=200,
+        seed=23,
+    )
+    assert result["coefficient_intervals"]["read"]["ci_low"] > 0
+    assert result["coefficient_intervals"]["write"]["ci_high"] < 0.5
+    assert result["n_bootstrap"] == 200

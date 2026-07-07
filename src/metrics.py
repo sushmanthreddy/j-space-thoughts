@@ -138,7 +138,9 @@ def partial_correlation(
         len(x_array) == len(y_array) == len(control_array)
     ):
         raise ValueError("x, y, and control rows must align")
-    mask = np.isfinite(x_array) & np.isfinite(y_array) & np.isfinite(control_array).all(1)
+    mask = (
+        np.isfinite(x_array) & np.isfinite(y_array) & np.isfinite(control_array).all(1)
+    )
     if mask.sum() < control_array.shape[1] + 3:
         raise ValueError("Insufficient finite rows for partial correlation")
     x_residual = _residualize(x_array[mask], control_array[mask])
@@ -165,7 +167,11 @@ def partial_correlation_with_ci(
             return partial_correlation(a, b, c)
 
     else:
-        arrays = [x, y, *[control_array[:, column] for column in range(control_array.shape[1])]]
+        arrays = [
+            x,
+            y,
+            *[control_array[:, column] for column in range(control_array.shape[1])],
+        ]
 
         def statistic(a, b, *columns):
             return partial_correlation(a, b, np.column_stack(columns))
@@ -218,6 +224,69 @@ def standardized_regression(
         "r_squared": r_squared,
         "interaction": interaction,
     }
+
+
+def standardized_regression_with_ci(
+    causal: Sequence[float],
+    write: Sequence[float],
+    read: Sequence[float],
+    *,
+    interaction: bool = False,
+    n_bootstrap: int = 5000,
+    confidence: float = 0.95,
+    seed: int = 1729,
+) -> dict[str, Any]:
+    """Standardized OLS coefficients with paired row-bootstrap intervals."""
+
+    causal_array, write_array, read_array = _finite_vectors(causal, write, read)
+    estimate = standardized_regression(
+        causal_array,
+        write_array,
+        read_array,
+        interaction=interaction,
+    )
+    coefficient_names = list(estimate["coefficients"])
+    rng = np.random.default_rng(seed)
+    samples: dict[str, list[float]] = {name: [] for name in coefficient_names}
+    r_squared_samples: list[float] = []
+    for _ in range(n_bootstrap):
+        selection = rng.integers(0, len(causal_array), size=len(causal_array))
+        try:
+            fitted = standardized_regression(
+                causal_array[selection],
+                write_array[selection],
+                read_array[selection],
+                interaction=interaction,
+            )
+        except ValueError:
+            continue
+        for name in coefficient_names:
+            value = float(fitted["coefficients"][name])
+            if np.isfinite(value):
+                samples[name].append(value)
+        if np.isfinite(fitted["r_squared"]):
+            r_squared_samples.append(float(fitted["r_squared"]))
+
+    minimum_valid = max(100, n_bootstrap // 2)
+    if min(len(values) for values in samples.values()) < minimum_valid:
+        raise ValueError("Too few finite bootstrap regression replicates")
+    alpha = (1.0 - confidence) / 2.0
+    estimate["coefficient_intervals"] = {
+        name: {
+            "ci_level": confidence,
+            "ci_low": float(np.quantile(values, alpha)),
+            "ci_high": float(np.quantile(values, 1.0 - alpha)),
+        }
+        for name, values in samples.items()
+    }
+    estimate["r_squared_interval"] = {
+        "ci_level": confidence,
+        "ci_low": float(np.quantile(r_squared_samples, alpha)),
+        "ci_high": float(np.quantile(r_squared_samples, 1.0 - alpha)),
+    }
+    estimate["n_bootstrap"] = n_bootstrap
+    estimate["seed"] = seed
+    return estimate
 
 
 def save_json(path: str | Path, payload: Mapping[str, Any]) -> None:
