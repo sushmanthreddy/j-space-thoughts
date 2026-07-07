@@ -151,6 +151,53 @@ def jlens_directions(
     }
 
 
+def jlens_direction_bank(
+    lens: Any,
+    lens_model: Any,
+    token_ids: Iterable[int],
+    layers: Iterable[int],
+    *,
+    fold_rms_gain: bool = False,
+    compute_device: str | torch.device = "cuda",
+    output_device: str | torch.device = "cuda",
+) -> dict[int, dict[int, torch.Tensor]]:
+    """Batch direction construction for many concepts and layers.
+
+    Moving one Jacobian at a time to the GPU avoids hundreds of slow CPU
+    matrix-vector products while keeping peak memory bounded.
+    """
+
+    validate_lens(lens, lens_model)
+    unique_tokens = sorted(set(int(token_id) for token_id in token_ids))
+    layer_list = sorted(set(int(layer) for layer in layers))
+    if not unique_tokens or not layer_list:
+        raise ValueError("At least one token and layer are required")
+    weight = unembedding_weight(lens_model).detach().float().cpu()
+    if unique_tokens[0] < 0 or unique_tokens[-1] >= weight.shape[0]:
+        raise ValueError("A requested token ID is outside the vocabulary")
+    rows = weight[unique_tokens]
+    if fold_rms_gain:
+        gain = getattr(getattr(lens_model, "_final_norm", None), "weight", None)
+        if gain is None:
+            raise TypeError("Final norm has no weight to fold into directions")
+        rows = rows * gain.detach().float().cpu().unsqueeze(0)
+    rows = rows.to(compute_device)
+    output: dict[int, dict[int, torch.Tensor]] = {
+        token_id: {} for token_id in unique_tokens
+    }
+    for layer in layer_list:
+        if layer not in lens.jacobians:
+            raise ValueError(f"Layer {layer} was not fitted")
+        jacobian = lens.jacobians[layer].to(compute_device, torch.float32)
+        directions = F.normalize(rows @ jacobian, dim=-1)
+        if not torch.isfinite(directions).all():
+            raise ValueError(f"Non-finite batched directions at layer {layer}")
+        for row_index, token_id in enumerate(unique_tokens):
+            output[token_id][layer] = directions[row_index].to(output_device)
+        del jacobian, directions
+    return output
+
+
 def write_by_position(
     residuals: Mapping[int, torch.Tensor],
     directions: Mapping[int, torch.Tensor],
@@ -184,4 +231,3 @@ def token_rank(logits: torch.Tensor, token_id: int) -> int:
         raise ValueError(f"Expected one-dimensional logits, got {tuple(logits.shape)}")
     value = logits[int(token_id)]
     return int((logits > value).sum().item() + 1)
-

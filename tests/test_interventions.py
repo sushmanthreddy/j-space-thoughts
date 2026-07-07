@@ -5,6 +5,7 @@ from torch import nn
 
 from src.interventions import (
     ablate_direction,
+    clamp_swapped_coordinates,
     residual_edit_hooks,
     swap_coordinates,
 )
@@ -47,6 +48,22 @@ def test_swap_rejects_singular_pair() -> None:
         assert "ill-conditioned" in str(error)
     else:
         raise AssertionError("Singular coordinate pair was not rejected")
+
+
+def test_clamped_swap_uses_clean_coefficients_and_current_orthogonal_part() -> None:
+    concept = torch.tensor([1.0, 0.0, 0.0])
+    foil = torch.tensor([0.5, 0.5, 0.0])
+    foil = foil / foil.norm()
+    clean = torch.tensor([[[2.0, -1.0, 4.0]]])
+    current = clean + torch.tensor([[[0.0, 0.0, 3.0]]])
+    basis = torch.stack([concept, foil])
+    clean_coefficients = (clean @ basis.T) @ torch.linalg.inv(basis @ basis.T)
+
+    edited = clamp_swapped_coordinates(current, clean, concept, foil)
+    edited_coefficients = (edited @ basis.T) @ torch.linalg.inv(basis @ basis.T)
+
+    assert torch.allclose(edited_coefficients, clean_coefficients.flip(-1), atol=1e-6)
+    assert edited[..., 2].item() == current[..., 2].item()
 
 
 class _TupleBlock(nn.Module):

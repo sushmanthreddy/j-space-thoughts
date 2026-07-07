@@ -64,6 +64,7 @@ def swap_coordinates(
     *,
     positions: Sequence[int] | None = None,
     max_condition: float = 1e4,
+    strength: float = 1.0,
 ) -> torch.Tensor:
     """Exactly swap two possibly nonorthogonal dot-product coordinates.
 
@@ -99,7 +100,64 @@ def swap_coordinates(
     projections = selected @ basis.T
     swapped = projections.flip(dims=(-1,))
     correction = (swapped - projections) @ inverse_gram @ basis
-    edited[:, indices, :] = (selected + correction).to(hidden.dtype)
+    if not torch.isfinite(torch.tensor(strength)):
+        raise ValueError(f"Swap strength must be finite, got {strength}")
+    edited[:, indices, :] = (selected + float(strength) * correction).to(hidden.dtype)
+    return edited
+
+
+def clamp_swapped_coordinates(
+    hidden: torch.Tensor,
+    clean_hidden: torch.Tensor,
+    concept_direction: torch.Tensor,
+    foil_direction: torch.Tensor,
+    *,
+    positions: Sequence[int] | None = None,
+    max_condition: float = 1e4,
+    strength: float = 1.0,
+) -> torch.Tensor:
+    """Clamp current concept/foil coefficients to clean counterfactual values.
+
+    Multi-layer swaps must not repeatedly re-swap already-corrupted coordinates.
+    At each layer this operation keeps the current orthogonal complement but
+    sets its two basis coefficients to the swapped coefficients from the clean
+    pass. ``strength=0`` clamps to clean; ``strength=1`` is the exact swap.
+    """
+
+    if hidden.shape != clean_hidden.shape or hidden.ndim != 3:
+        raise ValueError(
+            "Current and clean hidden states must share shape [B, S, D], got "
+            f"{tuple(hidden.shape)} and {tuple(clean_hidden.shape)}"
+        )
+    concept = concept_direction.detach().to(hidden.device, torch.float32)
+    foil = foil_direction.detach().to(hidden.device, torch.float32)
+    basis = torch.stack([concept, foil], dim=0)
+    norms = basis.norm(dim=-1)
+    if not torch.isfinite(norms).all() or not torch.allclose(
+        norms, torch.ones_like(norms), atol=1e-4, rtol=1e-4
+    ):
+        raise ValueError(f"Clamp directions must be unit norm, got {norms.tolist()}")
+    gram = basis @ basis.T
+    condition = torch.linalg.cond(gram)
+    if not torch.isfinite(condition) or float(condition) > max_condition:
+        raise ValueError(
+            f"Concept/foil Gram matrix is ill-conditioned: cond={float(condition):.4g}"
+        )
+    if not torch.isfinite(torch.tensor(strength)):
+        raise ValueError(f"Swap strength must be finite, got {strength}")
+    inverse_gram = torch.linalg.inv(gram)
+
+    indices = _resolved_positions(hidden.shape[1], positions)
+    current = hidden[:, indices, :].float()
+    clean = clean_hidden.detach().to(hidden.device)[:, indices, :].float()
+    current_coefficients = (current @ basis.T) @ inverse_gram
+    clean_coefficients = (clean @ basis.T) @ inverse_gram
+    desired_coefficients = clean_coefficients + float(strength) * (
+        clean_coefficients.flip(dims=(-1,)) - clean_coefficients
+    )
+    correction = (desired_coefficients - current_coefficients) @ basis
+    edited = hidden.clone()
+    edited[:, indices, :] = (current + correction).to(hidden.dtype)
     return edited
 
 
@@ -160,6 +218,7 @@ def swap_edits(
     *,
     positions: Sequence[int] | None = None,
     max_condition: float = 1e4,
+    strength: float = 1.0,
 ) -> dict[int, TensorEdit]:
     """Create exact concept/foil coordinate-swap closures for shared layers."""
 
@@ -174,10 +233,47 @@ def swap_edits(
                     foil,
                     positions=positions,
                     max_condition=max_condition,
+                    strength=strength,
                 )
             )
         )
         for layer in concept_directions
+    }
+
+
+def clamped_swap_edits(
+    clean_residuals: Mapping[int, torch.Tensor],
+    concept_directions: Mapping[int, torch.Tensor],
+    foil_directions: Mapping[int, torch.Tensor],
+    *,
+    positions: Sequence[int] | None = None,
+    max_condition: float = 1e4,
+    strength: float = 1.0,
+) -> dict[int, TensorEdit]:
+    """Create reference-defined clean-coordinate clamps for multiple layers."""
+
+    layers = set(concept_directions)
+    if layers != set(foil_directions) or layers != set(clean_residuals):
+        raise ValueError(
+            "Clean residuals, concept directions, and foil directions must "
+            "cover identical layers"
+        )
+    return {
+        layer: (
+            lambda hidden,
+            clean=clean_residuals[layer],
+            concept=concept_directions[layer],
+            foil=foil_directions[layer]: clamp_swapped_coordinates(
+                hidden,
+                clean,
+                concept,
+                foil,
+                positions=positions,
+                max_condition=max_condition,
+                strength=strength,
+            )
+        )
+        for layer in sorted(layers)
     }
 
 
@@ -219,4 +315,3 @@ def suppress_output_token(
     clamp_value = torch.finfo(edited.dtype).min if value is None else float(value)
     edited[..., int(token_id)] = clamp_value
     return edited
-
