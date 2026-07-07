@@ -4,11 +4,23 @@ import numpy as np
 import torch
 
 from src.metrics import (
+    binomial_rate_with_ci,
     logit_difference,
     partial_correlation,
     standardized_regression,
     standardized_regression_with_ci,
 )
+
+
+def test_binomial_wilson_interval_is_non_degenerate_at_boundaries() -> None:
+    all_zero = binomial_rate_with_ci([0] * 120)
+    all_one = binomial_rate_with_ci([1] * 120)
+
+    assert all_zero["estimate"] == 0.0
+    assert 0.02 < all_zero["ci_high"] < 0.05
+    assert all_one["estimate"] == 1.0
+    assert 0.95 < all_one["ci_low"] < 1.0
+    assert all_zero["interval_method"] == "Wilson score"
 
 
 def test_logit_difference_sign() -> None:

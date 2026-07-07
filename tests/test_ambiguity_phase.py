@@ -323,6 +323,12 @@ def test_p3_bootstraps_and_f8_plot_are_cpu_only() -> None:
     assert result["overall"]["statistics"]["counterbalance_robust_swap_flip_rate"][
         "estimate"
     ] == pytest.approx(0.75)
+    assert result["overall"]["statistics"]["committed_concept_write_abs_mean"][
+        "estimate"
+    ] == pytest.approx(np.mean([1.0 + 0.03 * index for index in range(40)]))
+    assert result["overall"]["statistics"]["alternate_concept_write_abs_mean"][
+        "estimate"
+    ] == pytest.approx(np.mean([0.8 * (1.0 + 0.03 * index) for index in range(40)]))
     assert (
         result["overall"]["statistics"]["internal_minus_suppression_damage"]["ci_low"]
         > 0.0

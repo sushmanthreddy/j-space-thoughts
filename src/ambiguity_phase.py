@@ -43,6 +43,7 @@ from src.jlens_iface import (
     workspace_layers,
 )
 from src.metrics import (
+    binomial_rate_with_ci,
     bootstrap_statistic,
     partial_correlation_with_ci,
     pearson_with_ci,
@@ -1040,6 +1041,20 @@ def _meta_variant_measurements(
             "mean_lens_rank": float(np.mean(list(lens_ranks.values()))),
             "final_output_rank": final_rank,
         }
+        suppressed_logits = suppress_output_token(context["clean_logits"], token_id)
+        suppressed_metric = _committed_metric(
+            suppressed_logits,
+            context["prepared_probe"],
+            committed_reading,
+        )
+        base["output_suppression"] = {
+            "status": "OK",
+            "token_id": token_id,
+            "clean_output_logit": float(context["clean_logits"][0, -1, token_id]),
+            "suppressed_output_logit": float(suppressed_logits[0, -1, token_id]),
+            **_effect_record(clean_metric, suppressed_metric),
+            "interpretation": OUTPUT_SUPPRESSION_INTERPRETATION,
+        }
         if final_rank <= output_top_k:
             base["ablation"] = {
                 "status": "CONTROL_REJECTED",
@@ -1120,6 +1135,9 @@ def _aggregate_meta_variants(
             "product_quantities_role": "diagnostic_only",
             "mean_lens_rank": float(np.mean(lens_ranks)),
             "mean_final_output_rank": float(np.mean(final_ranks)),
+            "output_suppression": _mean_effect(
+                [record["output_suppression"] for record in records]
+            ),
         }
         if all(record["ablation"]["status"] == "OK" for record in records):
             base.update(
@@ -1661,7 +1679,31 @@ def _p3_summary(
     agreement = [
         float(row["commitment"]["counterbalance_agreement"]) for row in measured
     ]
+    committed_write = [
+        float(row["counterbalanced"]["attribution"]["write_abs_mean"])
+        for row in measured
+    ]
+    committed_read = [
+        float(row["counterbalanced"]["attribution"]["read_abs_mean"])
+        for row in measured
+    ]
+    alternate_write = [
+        float(
+            row["counterbalanced"]["attribution"]["alternate_concept"]["write_abs_mean"]
+        )
+        for row in measured
+    ]
+    alternate_read = [
+        float(
+            row["counterbalanced"]["attribution"]["alternate_concept"]["read_abs_mean"]
+        )
+        for row in measured
+    ]
     values = {
+        "committed_concept_write_abs_mean": committed_write,
+        "alternate_concept_write_abs_mean": alternate_write,
+        "committed_concept_read_abs_mean": committed_read,
+        "alternate_concept_read_abs_mean": alternate_read,
         "clean_committed_margin": clean,
         "swap_edited_committed_margin": swap_edited,
         "swap_flip_rate": swap_flips,
@@ -1672,15 +1714,24 @@ def _p3_summary(
         "ablation_exceeds_suppression_rate": ablation_exceeds,
         "counterbalance_agreement_rate": agreement,
     }
-    summaries = {
-        name: _safe_bootstrap(
-            vector,
-            n_bootstrap=n_bootstrap,
-            confidence=confidence,
-            seed=seed + index,
-        )
-        for index, (name, vector) in enumerate(values.items())
+    binary_statistics = {
+        "swap_flip_rate",
+        "counterbalance_robust_swap_flip_rate",
+        "ablation_exceeds_suppression_rate",
+        "counterbalance_agreement_rate",
     }
+    summaries = {}
+    for index, (name, vector) in enumerate(values.items()):
+        summaries[name] = (
+            binomial_rate_with_ci(vector, confidence=confidence)
+            if name in binary_statistics
+            else _safe_bootstrap(
+                vector,
+                n_bootstrap=n_bootstrap,
+                confidence=confidence,
+                seed=seed + index,
+            )
+        )
     return {
         "n_total_rows": len(rows),
         "n": len(measured),

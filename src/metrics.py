@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -10,6 +11,50 @@ from typing import Any
 
 import numpy as np
 import torch
+
+
+def binomial_rate_with_ci(
+    values: Sequence[bool | int | float],
+    *,
+    confidence: float = 0.95,
+) -> dict[str, Any]:
+    """Binomial proportion with a Wilson score interval.
+
+    Unlike an item bootstrap, this interval remains non-degenerate when every
+    observed outcome is zero or one.
+    """
+
+    array = np.asarray(values, dtype=float).reshape(-1)
+    if len(array) == 0 or not np.isfinite(array).all():
+        raise ValueError("Binomial values must be nonempty and finite")
+    if not np.isin(array, [0.0, 1.0]).all():
+        raise ValueError("Binomial values must contain only zero/one outcomes")
+    if not 0.0 < confidence < 1.0:
+        raise ValueError("confidence must lie strictly between zero and one")
+    n = len(array)
+    estimate = float(array.mean())
+    # NormalDist avoids a scipy dependency in this low-level metrics module.
+    from statistics import NormalDist
+
+    z = NormalDist().inv_cdf(0.5 + confidence / 2.0)
+    z2 = z * z
+    denominator = 1.0 + z2 / n
+    center = (estimate + z2 / (2.0 * n)) / denominator
+    half_width = (
+        z
+        * math.sqrt(estimate * (1.0 - estimate) / n + z2 / (4.0 * n * n))
+        / denominator
+    )
+    return {
+        "status": "ESTIMATED",
+        "n": n,
+        "n_success": int(array.sum()),
+        "estimate": estimate,
+        "ci_level": confidence,
+        "ci_low": max(0.0, float(center - half_width)),
+        "ci_high": min(1.0, float(center + half_width)),
+        "interval_method": "Wilson score",
+    }
 
 
 def logit_difference(
