@@ -91,3 +91,7 @@ Raw gate artifact: `data/raw/v4/11_readval_gate.json` (SHA-256 `abcf605278a4c9b8
 
 **SKIPPED_PREREQUISITE.** G-READVAL failed. This notebook executed a model-free
 guard; no hypothesis science or historical science values were run.
+## Notebook 13 — P3 ambiguity science
+
+**SKIPPED_PREREQUISITE.** G-READVAL failed. This notebook executed a model-free
+guard; no hypothesis science or historical science values were run.
