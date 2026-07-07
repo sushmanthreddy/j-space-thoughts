@@ -75,6 +75,32 @@ J_LENS_ONLY_LIMITATION = (
     "does not establish mean-difference direction robustness; the independent "
     "MD robustness requirement for P1 is evaluated in the two-hop phase."
 )
+UPSTREAM_GATE_CONTEXT = {
+    "source": "data/raw/00_gates_qwen7b.json",
+    "model": MODEL_ID,
+    "strict_g2_status": "FAIL",
+    "strict_workspace_usable": False,
+    "raw_primary_known_case_directional_success": False,
+    "note": (
+        "The RMS-gain-folded sensitivity direction passed only the directional "
+        "subgate, while this phase uses raw W_U J directions for causal edits. "
+        "All ambiguity results are therefore diagnostic rather than confirmatory."
+    ),
+}
+OUTPUT_SUPPRESSION_INTERPRETATION = {
+    "status": "STRUCTURAL_ZERO_NEGATIVE_CONTROL",
+    "expected_exact_zero": True,
+    "reason": (
+        "Ambiguity tokenization requires both concept-token IDs to be disjoint "
+        "from the A/B behavior-token IDs. Suppressing only a concept vocabulary "
+        "logit cannot change the A-minus-B logit metric, so this control is "
+        "exactly zero by construction."
+    ),
+    "evidential_role": (
+        "Schema/instrumentation check only; the zero does not provide additional "
+        "causal evidence beyond the internal intervention itself."
+    ),
+}
 DIRECTION_POLICY = {
     "primary": PRIMARY_DIRECTION_METHOD,
     "primary_formula": "normalize(W_U[token] @ J_layer)",
@@ -85,6 +111,7 @@ DIRECTION_POLICY = {
     "diagnostic_only_quantities": (
         "support_oriented_read and sum(WRITE*READ) first-order prediction"
     ),
+    "phase_analysis_role": "diagnostic_upstream_strict_g2_failed",
     "limitation": J_LENS_ONLY_LIMITATION,
 }
 
@@ -426,9 +453,7 @@ def aggregate_counterbalanced_variants(
     )
     _require(np.isfinite(clean).all(), "Clean committed margins must be finite")
     ablation = _mean_effect([record["ablation"] for record in variant_records])
-    swap = _mean_effect(
-        [record["clean_clamped_swap"] for record in variant_records]
-    )
+    swap = _mean_effect([record["clean_clamped_swap"] for record in variant_records])
     committed_suppression = _mean_effect(
         [
             record["output_suppression"]["committed_concept"]
@@ -449,29 +474,71 @@ def aggregate_counterbalanced_variants(
         "first_order_predicted_delta",
         "first_order_predicted_positive_damage",
     )
-    aggregate: dict[str, float] = {}
-    for key in aggregate_keys:
-        values = np.asarray(
-            [float(record["attribution"]["aggregate"][key]) for record in variant_records]
-        )
-        _require(np.isfinite(values).all(), f"Non-finite attribution aggregate {key}")
-        aggregate[key] = float(values.mean())
+
+    def mean_attribution(role: str) -> dict[str, float]:
+        aggregates = [
+            (
+                record["attribution"]["aggregate"]
+                if role == "committed_concept"
+                else record["attribution"]["alternate_concept"]["aggregate"]
+            )
+            for record in variant_records
+        ]
+        result: dict[str, float] = {}
+        for key in aggregate_keys:
+            values = np.asarray(
+                [float(aggregate[key]) for aggregate in aggregates],
+                dtype=float,
+            )
+            _require(
+                np.isfinite(values).all(),
+                f"Non-finite {role} attribution aggregate {key}",
+            )
+            result[key] = float(values.mean())
+        return result
+
+    committed_attribution = mean_attribution("committed_concept")
+    alternate_attribution = mean_attribution("alternate_concept")
+    swap_variant_flips = [
+        float(record["clean_clamped_swap"]["edited_committed_margin"]) < 0.0
+        for record in variant_records
+    ]
     damage_gap = ablation["positive_damage"] - committed_suppression["positive_damage"]
     return {
         "n_variants": 2,
         "clean_committed_margin": float(clean.mean()),
         "clean_committed_margin_by_variant": clean.tolist(),
-        "attribution": aggregate,
+        "attribution": {
+            # Flat committed fields are retained for compatibility with the
+            # existing analysis/metrics schema.
+            **committed_attribution,
+            "committed_concept": committed_attribution,
+            "alternate_concept": alternate_attribution,
+            "comparison": {
+                "committed_minus_alternate_write_abs_mean": float(
+                    committed_attribution["write_abs_mean"]
+                    - alternate_attribution["write_abs_mean"]
+                ),
+                "committed_minus_alternate_read_abs_mean": float(
+                    committed_attribution["read_abs_mean"]
+                    - alternate_attribution["read_abs_mean"]
+                ),
+            },
+        },
         "ablation": ablation,
         "clean_clamped_swap": {
             **swap,
-            "flips_committed_mean_margin": bool(
-                swap["edited_committed_margin"] < 0.0
+            "flips_committed_mean_margin": bool(swap["edited_committed_margin"] < 0.0),
+            "variant_flips_committed_margin": swap_variant_flips,
+            "counterbalance_robust_flip": bool(all(swap_variant_flips)),
+            "counterbalance_robust_flip_rule": (
+                "edited committed margin < 0 in both original and mirrored probes"
             ),
         },
         "output_suppression": {
             "committed_concept": committed_suppression,
             "alternate_concept": alternate_suppression,
+            "interpretation": OUTPUT_SUPPRESSION_INTERPRETATION,
         },
         "internal_minus_suppression_positive_damage": float(damage_gap),
         "ablation_damage_exceeds_suppression": bool(damage_gap > 0.0),
@@ -552,11 +619,14 @@ def shared_direction_attribution(
         intervention_positions,
     )
 
-    with torch.enable_grad(), ActivationRecorder(
-        blocks,
-        at=layers,
-        start_graph_at=layers[0],
-    ) as recorder:
+    with (
+        torch.enable_grad(),
+        ActivationRecorder(
+            blocks,
+            at=layers,
+            start_graph_at=layers[0],
+        ) as recorder,
+    ):
         logits = hf_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -586,9 +656,13 @@ def shared_direction_attribution(
             gradients,
             strict=True,
         ):
-            direction = direction_bank[layer].detach().to(
-                activation.device,
-                torch.float32,
+            direction = (
+                direction_bank[layer]
+                .detach()
+                .to(
+                    activation.device,
+                    torch.float32,
+                )
             )
             norm = direction.norm()
             _require(
@@ -609,9 +683,7 @@ def shared_direction_attribution(
             layer_read = selected_gradient @ direction
             writes[layer] = layer_write.cpu().numpy()
             reads[layer] = layer_read.cpu().numpy()
-            predicted_by_layer[layer] = float(
-                (-(layer_write * layer_read).sum()).cpu()
-            )
+            predicted_by_layer[layer] = float((-(layer_write * layer_read).sum()).cpu())
         aggregate = aggregate_write_read(writes, reads)
         exact_predicted_delta = float(sum(predicted_by_layer.values()))
         _require(
@@ -827,7 +899,9 @@ def _clean_variant_context(
         "r1_concept": int(item["concepts"]["r1"]["token_id"]),
         "r2_concept": int(item["concepts"]["r2"]["token_id"]),
     }
-    meta_ids = {str(candidate["key"]): int(candidate["token_id"]) for candidate in meta_tokens}
+    meta_ids = {
+        str(candidate["key"]): int(candidate["token_id"]) for candidate in meta_tokens
+    }
     tracked_ids = {**concept_ids, **meta_ids}
     output_tracked = {
         key: _rank_record(final_logits, token_id)
@@ -918,14 +992,8 @@ def _meta_variant_measurements(
         writes = shared_result["write"]
         reads = shared_result["read"]
         aggregate = shared_result["aggregate"]
-        write_arrays = {
-            str(layer): writes[layer].tolist()
-            for layer in layers
-        }
-        read_arrays = {
-            str(layer): reads[layer].tolist()
-            for layer in layers
-        }
+        write_arrays = {str(layer): writes[layer].tolist() for layer in layers}
+        read_arrays = {str(layer): reads[layer].tolist() for layer in layers}
         lens_ranks = {
             str(layer): int(record["lens_readout"][str(layer)]["tracked"][key]["rank"])
             for layer in layers
@@ -1021,8 +1089,7 @@ def _aggregate_meta_variants(
         records = [record["meta_tokens"][key] for record in variant_records]
         write_abs = [float(record["write"]["abs_mean"]) for record in records]
         read_abs = [
-            float(record["read"]["independent_read_abs_mean"])
-            for record in records
+            float(record["read"]["independent_read_abs_mean"]) for record in records
         ]
         predicted_damage = [
             float(record["first_order_diagnostic"]["predicted_positive_damage"])
@@ -1127,6 +1194,7 @@ def _measure_primary_variant(
 
     shared_attribution = context["shared_attribution"]
     attribution = shared_attribution["direction_results"]["committed_concept"]
+    alternate_attribution = shared_attribution["direction_results"]["alternate_concept"]
     aggregate = attribution["aggregate"]
     ablated_logits = forward_logits(
         bundle.hf_model,
@@ -1164,9 +1232,7 @@ def _measure_primary_variant(
         suppression_records[role] = {
             "token_id": int(token_id),
             "clean_output_logit": float(context["clean_logits"][0, -1, token_id]),
-            "suppressed_output_logit": float(
-                suppressed_logits[0, -1, token_id]
-            ),
+            "suppressed_output_logit": float(suppressed_logits[0, -1, token_id]),
             **_effect_record(clean_metric, suppressed_metric),
         }
 
@@ -1183,13 +1249,9 @@ def _measure_primary_variant(
             "shared_forward_backward_count": int(
                 shared_attribution["n_forward_backward"]
             ),
-            "shared_direction_names": sorted(
-                shared_attribution["direction_results"]
-            ),
+            "shared_direction_names": sorted(shared_attribution["direction_results"]),
             "clean_metric": float(shared_attribution["metric"]),
-            "clean_metric_error": float(
-                shared_attribution["metric"] - clean_metric
-            ),
+            "clean_metric_error": float(shared_attribution["metric"] - clean_metric),
             "raw_write_by_layer_position": {
                 str(layer): attribution["write"][layer].tolist() for layer in layers
             },
@@ -1208,6 +1270,28 @@ def _measure_primary_variant(
                 "aggregate.first_order_predicted_positive_damage",
             ],
             "aggregate": aggregate,
+            "alternate_concept": {
+                "raw_write_by_layer_position": {
+                    str(layer): alternate_attribution["write"][layer].tolist()
+                    for layer in layers
+                },
+                "raw_read_by_layer_position": {
+                    str(layer): alternate_attribution["read"][layer].tolist()
+                    for layer in layers
+                },
+                "predicted_delta_by_layer": {
+                    str(layer): alternate_attribution["predicted_delta_by_layer"][layer]
+                    for layer in layers
+                },
+                "helper_predicted_delta": alternate_attribution["predicted_delta"],
+                "independent_read_field": "aggregate.read_abs_mean",
+                "diagnostic_only_fields": [
+                    "aggregate.support_oriented_read",
+                    "aggregate.first_order_predicted_delta",
+                    "aggregate.first_order_predicted_positive_damage",
+                ],
+                "aggregate": alternate_attribution["aggregate"],
+            },
         },
         "ablation": {
             "scope": "all workspace layers and all prompt positions",
@@ -1222,6 +1306,7 @@ def _measure_primary_variant(
         "output_suppression": {
             **suppression_records,
             "scope": "final vocabulary logits only; no internal activation edited",
+            "interpretation": OUTPUT_SUPPRESSION_INTERPRETATION,
         },
     }
 
@@ -1327,17 +1412,14 @@ def measure_ambiguity_items(
                 target_label = reading_to_label[committed_reading]
                 foil_label = reading_to_label[alternate_reading]
                 target_token_id = int(
-                    context["prepared_probe"]["continuations"][target_label][
-                        "token_id"
-                    ]
+                    context["prepared_probe"]["continuations"][target_label]["token_id"]
                 )
                 foil_token_id = int(
-                    context["prepared_probe"]["continuations"][foil_label][
-                        "token_id"
-                    ]
+                    context["prepared_probe"]["continuations"][foil_label]["token_id"]
                 )
                 shared_directions = {
                     "committed_concept": committed_directions,
+                    "alternate_concept": alternate_directions,
                     **{
                         f"meta::{candidate['key']}": raw_direction_bank[
                             int(candidate["token_id"])
@@ -1397,9 +1479,7 @@ def measure_ambiguity_items(
                     {
                         "measurement_status": "CONTROL_REJECTED",
                         "control_rejections": violations,
-                        "clean_variants": [
-                            context["record"] for context in contexts
-                        ],
+                        "clean_variants": [context["record"] for context in contexts],
                     }
                 )
                 rows.append(base)
@@ -1540,18 +1620,27 @@ def _p3_summary(
     seed: int,
 ) -> dict[str, Any]:
     measured = [row for row in rows if row.get("measurement_status") == "OK"]
-    clean = [float(row["counterbalanced"]["clean_committed_margin"]) for row in measured]
+    clean = [
+        float(row["counterbalanced"]["clean_committed_margin"]) for row in measured
+    ]
     swap_edited = [
         float(row["counterbalanced"]["clean_clamped_swap"]["edited_committed_margin"])
         for row in measured
     ]
     swap_flips = [
-        float(row["counterbalanced"]["clean_clamped_swap"]["flips_committed_mean_margin"])
+        float(
+            row["counterbalanced"]["clean_clamped_swap"]["flips_committed_mean_margin"]
+        )
+        for row in measured
+    ]
+    robust_swap_flips = [
+        float(
+            row["counterbalanced"]["clean_clamped_swap"]["counterbalance_robust_flip"]
+        )
         for row in measured
     ]
     ablation_damage = [
-        float(row["counterbalanced"]["ablation"]["positive_damage"])
-        for row in measured
+        float(row["counterbalanced"]["ablation"]["positive_damage"]) for row in measured
     ]
     suppression_damage = [
         float(
@@ -1576,6 +1665,7 @@ def _p3_summary(
         "clean_committed_margin": clean,
         "swap_edited_committed_margin": swap_edited,
         "swap_flip_rate": swap_flips,
+        "counterbalance_robust_swap_flip_rate": robust_swap_flips,
         "internal_ablation_positive_damage": ablation_damage,
         "output_suppression_positive_damage": suppression_damage,
         "internal_minus_suppression_damage": damage_gap,
@@ -1599,9 +1689,7 @@ def _p3_summary(
         ),
         "item_ids": [str(row["id"]) for row in measured],
         "statistics": summaries,
-        "raw_item_values": {
-            name: vector for name, vector in values.items()
-        },
+        "raw_item_values": {name: vector for name, vector in values.items()},
     }
 
 
@@ -1635,21 +1723,51 @@ def analyze_p3(
     if swap.get("status") == "ESTIMATED" and gap.get("status") == "ESTIMATED":
         supported = swap["ci_low"] > 0.5 and gap["ci_low"] > 0.0
         point_supported = swap["estimate"] > 0.5 and gap["estimate"] > 0.0
-        verdict = "supported" if supported else ("mixed" if point_supported else "refuted")
+        verdict = (
+            "supported" if supported else ("mixed" if point_supported else "refuted")
+        )
     else:
         verdict = "not_estimable"
     status_counts = Counter(str(row.get("measurement_status")) for row in rows)
     return {
         "prediction": "P3",
+        "analysis_role": "diagnostic_upstream_strict_g2_failed",
+        "upstream_gate_context": UPSTREAM_GATE_CONTEXT,
         "direction_method": PRIMARY_DIRECTION_METHOD,
         "commitment_rule": (
             "sign of mean original+mirrored clean r1-vs-r2 margin; no gold selection"
         ),
         "swap_success_rule": "counterbalanced committed margin after swap < 0",
+        "counterbalance_robust_swap_rule": (
+            "edited committed margin after swap < 0 in both original and mirrored probes"
+        ),
         "confound_control_rule": (
             "internal ablation positive damage minus final concept-token suppression "
             "positive damage > 0"
         ),
+        "output_suppression_interpretation": {
+            **OUTPUT_SUPPRESSION_INTERPRETATION,
+            "observed_all_exact_zero": bool(
+                overall["n"] > 0
+                and all(
+                    value == 0.0
+                    for value in overall["raw_item_values"][
+                        "output_suppression_positive_damage"
+                    ]
+                )
+            ),
+            "observed_damage_gap_equals_ablation": bool(
+                overall["n"] > 0
+                and all(
+                    gap == ablation
+                    for gap, ablation in zip(
+                        overall["raw_item_values"]["internal_minus_suppression_damage"],
+                        overall["raw_item_values"]["internal_ablation_positive_damage"],
+                        strict=True,
+                    )
+                )
+            ),
+        },
         "verdict_rule": (
             "supported iff the 95% CI lower bound for swap-flip rate exceeds "
             "0.5 and the CI lower bound for the damage gap exceeds 0; mixed "
@@ -1693,10 +1811,7 @@ def analyze_meta_tokens(
             and row["meta_counterbalanced"][key].get("status") == "OK"
         ]
         write = [float(record["mean_write_abs"]) for record in candidate_rows]
-        read = [
-            float(record["mean_independent_read_abs"])
-            for record in candidate_rows
-        ]
+        read = [float(record["mean_independent_read_abs"]) for record in candidate_rows]
         predicted_damage = [
             float(record["mean_first_order_predicted_positive_damage"])
             for record in candidate_rows
@@ -1706,8 +1821,7 @@ def analyze_meta_tokens(
             float(record["mean_final_output_rank"]) for record in candidate_rows
         ]
         damage = [
-            float(record["ablation"]["positive_damage"])
-            for record in candidate_rows
+            float(record["ablation"]["positive_damage"]) for record in candidate_rows
         ]
         if candidate_rows:
             candidate_mean_write.append(float(np.mean(write)))
@@ -1834,9 +1948,7 @@ def analyze_meta_tokens(
             "real meta-token ablation damage?"
         ),
         "primary_association": "by_candidate.<key>.read_vs_ablation_damage",
-        "adjusted_association": (
-            "by_candidate.<key>.partial_causal_read_given_write"
-        ),
+        "adjusted_association": ("by_candidate.<key>.partial_causal_read_given_write"),
         "selection": dict(meta_resolution),
         "interpretation_warning": (
             "These predeclared meta-token results are descriptive diagnostics. "
@@ -1855,12 +1967,12 @@ def analyze_meta_tokens(
 def plot_f8(
     rows: Sequence[Mapping[str, Any]],
 ) -> tuple[plt.Figure, np.ndarray]:
-    """F8: committed-reading WRITE×READ and its real ablation consequence."""
+    """F8: committed-vs-alternate and meta-token WRITE×READ diagnostics."""
 
     measured = [row for row in rows if row.get("measurement_status") == "OK"]
     _require(len(measured) >= 2, "F8 needs at least two completed ambiguity items")
     set_style()
-    figure, axes = plt.subplots(1, 2, figsize=(12.2, 5.0))
+    figure, axes = plt.subplots(1, 3, figsize=(18.0, 5.2))
     palette = {
         "lexical_ambiguity": "#4477AA",
         "pp_attachment": "#EE6677",
@@ -1878,6 +1990,22 @@ def plot_f8(
             float(row["counterbalanced"]["attribution"]["read_abs_mean"])
             for row in selected
         ]
+        alternate_write = [
+            float(
+                row["counterbalanced"]["attribution"]["alternate_concept"][
+                    "write_abs_mean"
+                ]
+            )
+            for row in selected
+        ]
+        alternate_read = [
+            float(
+                row["counterbalanced"]["attribution"]["alternate_concept"][
+                    "read_abs_mean"
+                ]
+            )
+            for row in selected
+        ]
         predicted = [
             float(
                 row["counterbalanced"]["attribution"][
@@ -1891,8 +2019,42 @@ def plot_f8(
             for row in selected
         ]
         color = palette.get(category, "0.4")
-        axes[0].scatter(write, read, s=34, alpha=0.75, label=category, color=color)
-        axes[1].scatter(
+        for committed_x, committed_y, alternate_x, alternate_y in zip(
+            write,
+            read,
+            alternate_write,
+            alternate_read,
+            strict=True,
+        ):
+            axes[0].plot(
+                [alternate_x, committed_x],
+                [alternate_y, committed_y],
+                color=color,
+                alpha=0.12,
+                linewidth=0.8,
+                zorder=1,
+            )
+        axes[0].scatter(
+            write,
+            read,
+            s=34,
+            alpha=0.78,
+            label=f"{category} — committed",
+            color=color,
+            marker="o",
+            zorder=3,
+        )
+        axes[0].scatter(
+            alternate_write,
+            alternate_read,
+            s=30,
+            alpha=0.65,
+            label=f"{category} — alternate",
+            color=color,
+            marker="x",
+            zorder=2,
+        )
+        axes[2].scatter(
             predicted,
             measured_damage,
             s=34,
@@ -1900,11 +2062,71 @@ def plot_f8(
             label=category,
             color=color,
         )
-    axes[0].axhline(0.0, color="0.45", linewidth=1)
     axes[0].set(
-        xlabel="Committed concept WRITE strength (mean |projection|)",
+        xlabel="Concept WRITE strength (mean |projection|)",
         ylabel="Independent attribution READ (mean |grad(M) · direction|)",
-        title="Committed interpretation: independent WRITE and READ",
+        title="Committed circles vs alternate crosses",
+    )
+
+    candidate_rows: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in measured:
+        for key, record in row.get("meta_counterbalanced", {}).items():
+            if record.get("status") == "OK":
+                candidate_rows[str(key)].append(record)
+    meta_write: list[float] = []
+    meta_read: list[float] = []
+    meta_damage: list[float] = []
+    meta_labels: list[str] = []
+    for key, records in sorted(candidate_rows.items()):
+        meta_labels.append(key)
+        meta_write.append(
+            float(np.mean([record["mean_write_abs"] for record in records]))
+        )
+        meta_read.append(
+            float(np.mean([record["mean_independent_read_abs"] for record in records]))
+        )
+        meta_damage.append(
+            float(
+                np.mean([record["ablation"]["positive_damage"] for record in records])
+            )
+        )
+    if meta_labels:
+        meta_scatter = axes[1].scatter(
+            meta_write,
+            meta_read,
+            c=meta_damage,
+            cmap="coolwarm",
+            s=75,
+            edgecolor="0.25",
+        )
+        for label, x_value, y_value in zip(
+            meta_labels,
+            meta_write,
+            meta_read,
+            strict=True,
+        ):
+            axes[1].annotate(
+                label,
+                (x_value, y_value),
+                xytext=(4, 3),
+                textcoords="offset points",
+                fontsize=7,
+            )
+        colorbar = figure.colorbar(meta_scatter, ax=axes[1], pad=0.02)
+        colorbar.set_label("mean real ablation damage")
+    else:
+        axes[1].text(
+            0.5,
+            0.5,
+            "No complete meta-token rows",
+            transform=axes[1].transAxes,
+            ha="center",
+            va="center",
+        )
+    axes[1].set(
+        xlabel="Meta-token WRITE strength",
+        ylabel="Meta-token independent READ",
+        title="Preregistered interpretive meta-tokens",
     )
     all_predicted = np.asarray(
         [
@@ -1924,15 +2146,17 @@ def plot_f8(
     )
     lower = float(min(all_predicted.min(), all_measured.min()))
     upper = float(max(all_predicted.max(), all_measured.max()))
-    axes[1].plot([lower, upper], [lower, upper], "--", color="0.45", linewidth=1)
-    axes[1].set(
+    axes[2].plot([lower, upper], [lower, upper], "--", color="0.45", linewidth=1)
+    axes[2].set(
         xlabel=r"Diagnostic first-order $\sum WRITE\,READ$ predicted damage",
         ylabel="Real all-band ablation damage",
         title="Diagnostic product vs. real intervention",
     )
-    axes[0].legend(frameon=False, fontsize=8)
-    figure.suptitle("F8 — Ambiguity commitment is measured after counterbalancing")
-    figure.tight_layout()
+    axes[0].legend(frameon=False, fontsize=6, ncol=2)
+    figure.suptitle(
+        "F8 — diagnostic ambiguity results (upstream strict Qwen-7B G2 failed)"
+    )
+    figure.tight_layout(rect=(0, 0, 1, 0.94))
     return figure, axes
 
 
@@ -1941,7 +2165,9 @@ def _direction_sensitivity_table(
     folded_bank: Mapping[int, Mapping[int, torch.Tensor]],
     token_labels: Mapping[int, Sequence[str]],
 ) -> dict[str, Any]:
-    _require(set(raw_bank) == set(folded_bank), "Direction banks cover different tokens")
+    _require(
+        set(raw_bank) == set(folded_bank), "Direction banks cover different tokens"
+    )
     return {
         str(token_id): {
             "token_id": int(token_id),
@@ -2045,6 +2271,9 @@ def run_qwen_ambiguity_phase(
         plt.close(figure)
         result = {
             "schema_version": SCHEMA_VERSION,
+            "analysis_role": "diagnostic_upstream_strict_g2_failed",
+            "upstream_gate_context": UPSTREAM_GATE_CONTEXT,
+            "output_suppression_control": OUTPUT_SUPPRESSION_INTERPRETATION,
             "seed": SEED,
             "model": {
                 "id": MODEL_ID,

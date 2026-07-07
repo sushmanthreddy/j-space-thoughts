@@ -118,7 +118,16 @@ def _variant_record(
                 "support_oriented_read": 0.3 if variant == "original" else 0.5,
                 "first_order_predicted_delta": -1.0,
                 "first_order_predicted_positive_damage": 1.0,
-            }
+            },
+            "alternate_concept": {
+                "aggregate": {
+                    "write_abs_mean": 1.0 if variant == "original" else 3.0,
+                    "read_abs_mean": 0.2 if variant == "original" else 0.4,
+                    "support_oriented_read": 0.1 if variant == "original" else 0.3,
+                    "first_order_predicted_delta": -0.5,
+                    "first_order_predicted_positive_damage": 0.5,
+                }
+            },
         },
         "ablation": _effect(clean, ablated),
         "clean_clamped_swap": _effect(clean, swapped),
@@ -149,10 +158,30 @@ def test_counterbalanced_effect_aggregation_uses_oriented_margins() -> None:
     assert result["clean_committed_margin"] == pytest.approx(2.0)
     assert result["attribution"]["write_abs_mean"] == pytest.approx(3.0)
     assert result["attribution"]["support_oriented_read"] == pytest.approx(0.4)
+    assert result["attribution"]["committed_concept"][
+        "write_abs_mean"
+    ] == pytest.approx(3.0)
+    assert result["attribution"]["alternate_concept"][
+        "write_abs_mean"
+    ] == pytest.approx(2.0)
+    assert result["attribution"]["alternate_concept"]["read_abs_mean"] == pytest.approx(
+        0.3
+    )
     assert result["ablation"]["positive_damage"] == pytest.approx(1.5)
-    assert result["clean_clamped_swap"]["edited_committed_margin"] == pytest.approx(-1.5)
+    assert result["clean_clamped_swap"]["edited_committed_margin"] == pytest.approx(
+        -1.5
+    )
     assert result["clean_clamped_swap"]["flips_committed_mean_margin"] is True
+    assert result["clean_clamped_swap"]["variant_flips_committed_margin"] == [
+        True,
+        True,
+    ]
+    assert result["clean_clamped_swap"]["counterbalance_robust_flip"] is True
     assert result["output_suppression"]["committed_concept"]["positive_damage"] == 0.0
+    assert (
+        result["output_suppression"]["interpretation"]["status"]
+        == "STRUCTURAL_ZERO_NEGATIVE_CONTROL"
+    )
     assert result["internal_minus_suppression_positive_damage"] == pytest.approx(1.5)
 
 
@@ -191,6 +220,7 @@ def test_shared_attribution_projects_one_backward_onto_all_meta_directions() -> 
     third = F.normalize(torch.tensor([-1.0, 3.0, 2.0, 1.0]), dim=0)
     banks = {
         "committed_concept": {0: first, 1: second},
+        "alternate_concept": {0: second, 1: first},
         "meta::meaning": {0: second, 1: third},
         "meta::ambiguous": {0: third, 1: first},
     }
@@ -228,7 +258,7 @@ def _analysis_rows() -> list[dict]:
     rows = []
     for index in range(40):
         damage = 0.8 + 0.02 * index
-        suppression = 0.05
+        suppression = 0.0
         write = 1.0 + 0.03 * index
         read = 0.2 + 0.01 * index
         rows.append(
@@ -244,18 +274,40 @@ def _analysis_rows() -> list[dict]:
                         "read_abs_mean": abs(read),
                         "support_oriented_read": read,
                         "first_order_predicted_positive_damage": write * read,
+                        "alternate_concept": {
+                            "write_abs_mean": 0.8 * write,
+                            "read_abs_mean": 0.7 * abs(read),
+                            "support_oriented_read": 0.7 * read,
+                            "first_order_predicted_positive_damage": (
+                                0.56 * write * read
+                            ),
+                        },
                     },
                     "ablation": {"positive_damage": damage},
                     "clean_clamped_swap": {
                         "edited_committed_margin": -0.4 - 0.01 * index,
                         "flips_committed_mean_margin": True,
+                        "counterbalance_robust_flip": index % 4 != 0,
                     },
                     "output_suppression": {
                         "committed_concept": {"positive_damage": suppression}
                     },
-                    "internal_minus_suppression_positive_damage": damage
-                    - suppression,
+                    "internal_minus_suppression_positive_damage": damage - suppression,
                     "ablation_damage_exceeds_suppression": True,
+                },
+                "meta_counterbalanced": {
+                    "meaning_en": {
+                        "status": "OK",
+                        "mean_write_abs": 0.7 * write,
+                        "mean_independent_read_abs": 0.8 * abs(read),
+                        "ablation": {"positive_damage": 0.6 * damage},
+                    },
+                    "ambiguity_en": {
+                        "status": "OK",
+                        "mean_write_abs": 0.9 * write,
+                        "mean_independent_read_abs": 0.9 * abs(read),
+                        "ablation": {"positive_damage": 0.7 * damage},
+                    },
                 },
             }
         )
@@ -268,10 +320,29 @@ def test_p3_bootstraps_and_f8_plot_are_cpu_only() -> None:
 
     assert result["overall"]["n"] == 40
     assert result["overall"]["statistics"]["swap_flip_rate"]["estimate"] == 1.0
-    assert result["overall"]["statistics"]["internal_minus_suppression_damage"][
-        "ci_low"
-    ] > 0.0
+    assert result["overall"]["statistics"]["counterbalance_robust_swap_flip_rate"][
+        "estimate"
+    ] == pytest.approx(0.75)
+    assert (
+        result["overall"]["statistics"]["internal_minus_suppression_damage"]["ci_low"]
+        > 0.0
+    )
     assert result["verdict"] == "supported"
+    assert result["analysis_role"] == "diagnostic_upstream_strict_g2_failed"
+    assert result["upstream_gate_context"]["strict_g2_status"] == "FAIL"
+    assert (
+        result["output_suppression_interpretation"]["status"]
+        == "STRUCTURAL_ZERO_NEGATIVE_CONTROL"
+    )
+    assert (
+        result["output_suppression_interpretation"]["observed_all_exact_zero"] is True
+    )
+    assert (
+        result["output_suppression_interpretation"][
+            "observed_damage_gap_equals_ablation"
+        ]
+        is True
+    )
     assert set(result["by_category"]) == {
         "lexical_ambiguity",
         "pp_attachment",
@@ -281,11 +352,13 @@ def test_p3_bootstraps_and_f8_plot_are_cpu_only() -> None:
 
     figure, axes = plot_f8(rows)
     try:
-        assert len(axes) == 2
+        assert len(axes) == 3
         assert "WRITE" in axes[0].get_xlabel()
         assert "Independent" in axes[0].get_ylabel()
-        assert "Diagnostic" in axes[1].get_xlabel()
-        assert "Real all-band" in axes[1].get_ylabel()
+        assert "Meta-token" in axes[1].get_xlabel()
+        assert "interpretive meta-tokens" in axes[1].get_title()
+        assert "Diagnostic" in axes[2].get_xlabel()
+        assert "Real all-band" in axes[2].get_ylabel()
     finally:
         plt.close(figure)
 
