@@ -646,11 +646,337 @@ print('Notebook 10 complete. G-READVAL remains pending; science is prohibited.')
     return target
 
 
+def build_notebook11() -> Path:
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            """# 11 — Hard G-READVAL gate
+
+This notebook applies the thresholds frozen before notebook-10 outcomes. It is
+model-free and may not alter the estimator, path threshold, alpha, roster, or
+empty-path policy.
+
+Both subgates must pass:
+
+1. locked `N=21` known-answer Spearman rho >=0.4 with source-concept-cluster
+   bootstrap 95% CI lower bound >0, and every row estimable;
+2. at least 6/8 narration passages across at least three languages must have a
+   finite behavior-specific auto/direct ratio <=0.50, low causal change, and a
+   clean-capable baseline. `NO_AUTO_PATH_DETECTED` is not a low-READ pass."""
+        ),
+        nbformat.v4.new_code_cell(
+            """import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import spearmanr
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+
+from src.metrics import save_json
+from src.plotting import save_figure, set_style
+from src.v3_reverify import _repair_v2_sha256
+
+metrics_path = ROOT / 'results/metrics.json'
+metrics = json.loads(metrics_path.read_text())
+v4 = metrics['calibration_v4']
+assert v4['stage10']['status'] == 'COMPLETE'
+assert v4['gate_ledger']['g_readval'] == 'PENDING'
+assert v4['gate_ledger']['stage_a_science'] == 'PROHIBITED'
+assert v4['protocol']['new_read_estimators_permitted'] == 1
+assert v4['protocol']['causal_intervention']['alpha_resweep'] is False
+assert _repair_v2_sha256(metrics['repair_v2']) == metrics['calibration_v3']['provenance']['repair_v2_sha256']
+protocol = v4['protocol']
+known_rows = v4['stage10']['known_answer']['rows']
+narration_rows = v4['stage10']['narration']['rows']
+assert len(known_rows) == protocol['validation_n'] == 21
+assert len(narration_rows) == 8"""
+        ),
+        nbformat.v4.new_code_cell(
+            """read_values = np.asarray([
+    row['behavior_specific_read']['equal_family_composite'] for row in known_rows
+], dtype=float)
+causal_values = np.asarray([row['causal_abs'] for row in known_rows], dtype=float)
+all_estimable = bool(
+    all(row['estimable'] for row in known_rows)
+    and np.isfinite(read_values).all()
+    and np.isfinite(causal_values).all()
+)
+rho_result = spearmanr(read_values, causal_values)
+rho = float(rho_result.statistic)
+p_value = float(rho_result.pvalue)
+
+clusters = np.asarray([row['cluster'] for row in known_rows], dtype=object)
+unique_clusters = np.asarray(sorted(set(clusters.tolist())), dtype=object)
+cluster_indices = {
+    cluster: np.flatnonzero(clusters == cluster) for cluster in unique_clusters
+}
+rng = np.random.default_rng(protocol['known_gate']['bootstrap_seed'])
+bootstrap_draws = protocol['known_gate']['bootstrap_draws']
+bootstrap_rhos = []
+for _ in range(bootstrap_draws):
+    sampled = rng.choice(unique_clusters, size=len(unique_clusters), replace=True)
+    indices = np.concatenate([cluster_indices[cluster] for cluster in sampled])
+    x = read_values[indices]
+    y = causal_values[indices]
+    if len(np.unique(x)) < 2 or len(np.unique(y)) < 2:
+        continue
+    value = float(spearmanr(x, y).statistic)
+    if np.isfinite(value):
+        bootstrap_rhos.append(value)
+bootstrap_rhos = np.asarray(bootstrap_rhos, dtype=float)
+ci_low, ci_high = np.quantile(bootstrap_rhos, [0.025, 0.975])
+known_checks = {
+    'all_21_locked_rows_estimable': all_estimable,
+    'spearman_rho_at_least_0_4': rho >= protocol['known_gate']['rho_min'],
+    'bootstrap_ci_lower_strictly_positive': float(ci_low) > 0.0,
+    'at_least_95_percent_bootstrap_draws_valid': len(bootstrap_rhos) >= 0.95 * bootstrap_draws,
+}
+known_status = 'PASS' if all(known_checks.values()) else 'FAIL'
+known_gate = {
+    'status': known_status,
+    'n': len(known_rows),
+    'n_source_concept_clusters': len(unique_clusters),
+    'spearman_rho': rho,
+    'p_value_two_sided_descriptive': p_value,
+    'ci_low': float(ci_low),
+    'ci_high': float(ci_high),
+    'ci_level': 0.95,
+    'bootstrap_method': 'source-concept-cluster percentile bootstrap',
+    'bootstrap_draws_requested': bootstrap_draws,
+    'bootstrap_draws_valid': len(bootstrap_rhos),
+    'bootstrap_seed': protocol['known_gate']['bootstrap_seed'],
+    'checks': known_checks,
+    'rows': [
+        {
+            'name': row['name'],
+            'cluster': row['cluster'],
+            'causal_abs': row['causal_abs'],
+            'behavior_specific_read': row['behavior_specific_read']['equal_family_composite'],
+            'old_global_read': row['old_global_read']['equal_family_composite'],
+            's_m_size': row['behavior_specific_read']['s_m']['n_components'],
+            'estimable': row['estimable'],
+        }
+        for row in known_rows
+    ],
+}
+print(json.dumps({
+    'known_status': known_status,
+    'N': len(known_rows),
+    'clusters': len(unique_clusters),
+    'rho': rho,
+    'CI95': [float(ci_low), float(ci_high)],
+    'bootstrap_valid': len(bootstrap_rhos),
+    'checks': known_checks,
+}, indent=2))"""
+        ),
+        nbformat.v4.new_code_cell(
+            """frozen_v3 = metrics['calibration_v3']['stage1_5_alpha_sweep']['masked_weight_read']
+narration_gate_rows = []
+for row in narration_rows:
+    ratio_record = row['behavior_specific_ratio']
+    ratio = ratio_record['primary_ratio']
+    finite_ratio = ratio is not None and np.isfinite(float(ratio))
+    read_low = bool(finite_ratio and float(ratio) <= protocol['narration_gate']['max_read_ratio'])
+    causal_low = row['causal_abs'] <= protocol['narration_gate']['requires_low_causal_abs_delta']
+    joint = bool(read_low and causal_low and row['clean_capable'])
+    narration_gate_rows.append({
+        'key': row['key'],
+        'language': row['language'],
+        'frozen_v3_global_ratio': frozen_v3[row['key']]['primary_ratio'],
+        'recomputed_old_global_ratio': row['old_global_primary_ratio'],
+        'behavior_specific_ratio': ratio,
+        'behavior_specific_status': ratio_record['status'],
+        'auto_s_m_size': row['behavior_specific_auto']['s_m']['n_components'],
+        'direct_s_m_size': row['behavior_specific_direct']['s_m']['n_components'],
+        'causal_abs': row['causal_abs'],
+        'clean_capable': row['clean_capable'],
+        'read_low': read_low,
+        'causal_low': causal_low,
+        'joint_pass': joint,
+    })
+reproduced = [row for row in narration_gate_rows if row['joint_pass']]
+languages = sorted({row['language'] for row in reproduced})
+narration_checks = {
+    'at_least_6_of_8_joint': len(reproduced) >= protocol['narration_gate']['min_passages'],
+    'at_least_3_languages': len(languages) >= protocol['narration_gate']['min_languages'],
+    'all_eight_causal_low': all(row['causal_low'] for row in narration_gate_rows),
+    'empty_auto_paths_not_counted_as_low': all(
+        not row['read_low']
+        for row in narration_gate_rows
+        if row['behavior_specific_status'] == 'NO_AUTO_PATH_DETECTED'
+    ),
+}
+narration_status = 'PASS' if all(narration_checks.values()) else 'FAIL'
+narration_gate = {
+    'status': narration_status,
+    'n': 8,
+    'n_joint_pass': len(reproduced),
+    'languages_joint_pass': languages,
+    'n_finite_behavior_specific_ratios': sum(
+        row['behavior_specific_ratio'] is not None for row in narration_gate_rows
+    ),
+    'checks': narration_checks,
+    'rows': narration_gate_rows,
+}
+print(json.dumps({
+    'narration_status': narration_status,
+    'joint': len(reproduced),
+    'languages': languages,
+    'finite_behavior_specific_ratios': narration_gate['n_finite_behavior_specific_ratios'],
+    'checks': narration_checks,
+}, indent=2))
+for row in narration_gate_rows:
+    print(row)"""
+        ),
+        nbformat.v4.new_code_cell(
+            """set_style()
+fig, ax = plt.subplots(figsize=(8.2, 6.4))
+ax.scatter(read_values, causal_values, color='#1565C0', s=55)
+for row, x, y in zip(known_rows, read_values, causal_values, strict=True):
+    ax.annotate(row['name'], (x, y), xytext=(3, 3), textcoords='offset points', fontsize=6)
+ax.set_xlabel('behavior-specific path-restricted READ')
+ax.set_ylabel('|CAUSAL| = |M_clean - M_edited|')
+ax.set_title(
+    f"F-READVAL-1 — known-answer validation\\n"
+    f"Spearman rho={rho:.3f}, cluster-bootstrap 95% CI [{ci_low:.3f}, {ci_high:.3f}], N={len(known_rows)}"
+)
+f1_path = ROOT / 'results/figures/f_readval_1_v4.png'
+save_figure(fig, f1_path)
+plt.close(fig)
+
+keys = [row['key'] for row in narration_gate_rows]
+global_values = [row['recomputed_old_global_ratio'] for row in narration_gate_rows]
+behavior_values = [
+    0.0 if row['behavior_specific_ratio'] is None else row['behavior_specific_ratio']
+    for row in narration_gate_rows
+]
+x = np.arange(len(keys)); width = 0.36
+fig, ax = plt.subplots(figsize=(10.0, 5.8))
+ax.bar(x - width / 2, global_values, width, label='old global/top-k READ', color='#6A1B9A')
+bars = ax.bar(x + width / 2, behavior_values, width, label='behavior-specific READ', color='#00897B')
+for bar, row in zip(bars, narration_gate_rows, strict=True):
+    if row['behavior_specific_ratio'] is None:
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            0.03,
+            'NO PATH',
+            ha='center',
+            va='bottom',
+            rotation=90,
+            fontsize=7,
+            color='#B71C1C',
+        )
+ax.axhline(0.5, color='black', linestyle='--', linewidth=1, label='low-READ bar 0.50')
+ax.set_xticks(x, keys)
+ax.set_ylabel('auto/direct primary READ ratio')
+ax.set_title('F-READVAL-2 — narration global vs behavior-specific READ\\nNO PATH bars are not gate passes')
+ax.legend(loc='upper left', fontsize=8)
+f2_path = ROOT / 'results/figures/f_readval_2_v4.png'
+save_figure(fig, f2_path)
+plt.close(fig)
+print(f1_path, f2_path)"""
+        ),
+        nbformat.v4.new_code_cell(
+            """g_readval = 'PASS' if known_status == 'PASS' and narration_status == 'PASS' else 'FAIL'
+raw_gate = {
+    'schema_version': 'g-readval-v4-raw',
+    'protocol_sha256': v4['protocol_sha256'],
+    'known_predictivity': known_gate,
+    'known_bootstrap_rhos': [float(value) for value in bootstrap_rhos],
+    'narration_separation': narration_gate,
+    'decision': g_readval,
+}
+raw_path = ROOT / 'data/raw/v4/11_readval_gate.json'
+save_json(raw_path, raw_gate)
+raw_bytes = raw_path.stat().st_size
+raw_sha = hashlib.sha256(raw_path.read_bytes()).hexdigest()
+
+metrics = json.loads(metrics_path.read_text())
+v4 = metrics['calibration_v4']
+assert v4['protocol_sha256'] == raw_gate['protocol_sha256']
+v4['stage11_readval'] = {
+    'status': 'COMPLETE',
+    'g_readval': g_readval,
+    'known_predictivity': known_gate,
+    'narration_separation': narration_gate,
+    'figures': [
+        str(f1_path.relative_to(ROOT)),
+        str(f2_path.relative_to(ROOT)),
+    ],
+    'raw_artifact': str(raw_path.relative_to(ROOT)),
+    'raw_artifact_bytes': raw_bytes,
+    'raw_artifact_sha256': raw_sha,
+    'decision_rule': 'PASS iff known predictivity AND narration separation pass',
+}
+v4['gate_ledger']['g_readval'] = g_readval
+if g_readval == 'PASS':
+    v4['gate_ledger']['stage_a_science'] = 'ALLOWED'
+    v4['gate_ledger']['stage_b_report'] = 'NOT_REQUIRED'
+    v4['current_allowed_conclusion'] = 'READ_VALIDATED_STAGE_A_SCIENCE_ALLOWED'
+else:
+    v4['gate_ledger']['stage_a_science'] = 'SKIPPED_PREREQUISITE'
+    v4['gate_ledger']['stage_b_report'] = 'REQUIRED'
+    v4['current_allowed_conclusion'] = 'G_READVAL_FAILED_METHODS_LIMITATION_NO_HYPOTHESIS_VERDICT'
+save_json(metrics_path, metrics)
+
+known_table = '\\n'.join(
+    '| {name} | {causal:.3f} | {read:.3f} | {global_read:.3f} | {s_m} | {estimable} |'.format(
+        name=row['name'],
+        causal=row['causal_abs'],
+        read=row['behavior_specific_read'],
+        global_read=row['old_global_read'],
+        s_m=row['s_m_size'],
+        estimable='YES' if row['estimable'] else 'NO',
+    )
+    for row in known_gate['rows']
+)
+narration_table = '\\n'.join(
+    '| {key} | {language} | {frozen:.3f} | {recomputed:.3f} | {behavior} | {auto_s} | {direct_s} | {causal:.3f} | {joint} |'.format(
+        key=row['key'],
+        language=row['language'],
+        frozen=row['frozen_v3_global_ratio'],
+        recomputed=row['recomputed_old_global_ratio'],
+        behavior=('NA' if row['behavior_specific_ratio'] is None else f"{row['behavior_specific_ratio']:.3f}"),
+        auto_s=row['auto_s_m_size'],
+        direct_s=row['direct_s_m_size'],
+        causal=row['causal_abs'],
+        joint='PASS' if row['joint_pass'] else 'FAIL',
+    )
+    for row in narration_gate_rows
+)
+report_path = ROOT / 'results/RESULTS.md'
+report = report_path.read_text()
+marker = '\\n## Notebook 11 — G-READVAL'
+if marker in report:
+    report = report.split(marker, 1)[0].rstrip() + '\\n'
+section = f'''\n## Notebook 11 — G-READVAL\n\n### (a) Known-answer predictivity\n\n- Status: **{known_status}**.\n- N={len(known_rows)} across {len(unique_clusters)} source-concept clusters.\n- Spearman rho={rho:.3f}; source-cluster bootstrap 95% CI [{ci_low:.3f}, {ci_high:.3f}] ({len(bootstrap_rhos)}/{bootstrap_draws} valid draws).\n- Frozen bar: rho>=0.4 and CI lower>0, with every locked row estimable.\n\n| item | |CAUSAL| | behavior-specific READ | old global READ | |S_M| | estimable |\n| --- | ---: | ---: | ---: | ---: | --- |\n{known_table}\n\n![F-READVAL-1](figures/f_readval_1_v4.png)\n\n### (b) Narration separation\n\n- Status: **{narration_status}**.\n- Joint low-READ/low-CAUSAL/clean-capable: {len(reproduced)}/8 across {len(languages)} languages.\n- Finite behavior-specific ratios: {narration_gate['n_finite_behavior_specific_ratios']}/8. Empty auto path sets are `NO_AUTO_PATH_DETECTED`, not low-READ passes.\n\n| item | language | frozen v3 global | recomputed global | behavior-specific | |S_auto| | |S_direct| | |CAUSAL| | joint |\n| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n{narration_table}\n\n![F-READVAL-2](figures/f_readval_2_v4.png)\n\n### Decision\n\n**G-READVAL {g_readval}.** Both subgates were required. {'Stage A science is licensed.' if g_readval == 'PASS' else 'Stage A science is prohibited; the workflow must stop estimator work and take Road B.'}\n\nThe new estimator is selection-conditioned on exact path patching for the same behavior metric, but path discovery used a distinct source-only deletion rather than the causal swap endpoint. No threshold or alpha was tuned after outcomes.\n\nRaw gate artifact: `{raw_path.relative_to(ROOT)}` (SHA-256 `{raw_sha}`).\n'''
+report_path.write_text(report.rstrip() + section, encoding='utf-8')
+print(json.dumps({
+    'G-READVAL': g_readval,
+    'known': known_status,
+    'narration': narration_status,
+    'next': '12_science_twohop' if g_readval == 'PASS' else '12_skip_then_14_methods_report',
+    'raw_sha256': raw_sha,
+}, indent=2))"""
+        ),
+    ]
+    target = ROOT / "notebooks" / "11_readval_gate.ipynb"
+    nbformat.write(notebook, target)
+    return target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("notebook", choices=("10",))
+    parser.add_argument("notebook", choices=("10", "11"))
     arguments = parser.parse_args()
-    builders = {"10": build_notebook10}
+    builders = {"10": build_notebook10, "11": build_notebook11}
     target = builders[arguments.notebook]()
     print(json.dumps({"built": str(target.relative_to(ROOT))}, indent=2))
 
