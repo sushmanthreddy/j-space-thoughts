@@ -1,0 +1,21 @@
+# Runtime used for the executed notebooks. Install the reference J-Lens checkout
+# separately in editable mode as documented in README.md.
+torch>=2.5,<3
+transformers>=5.5,<6
+accelerate>=1.10,<2
+huggingface-hub>=0.34
+numpy>=2.2,<2.3
+scipy>=1.16.3,<1.17
+pandas>=2.2,<3
+scikit-learn>=1.5,<2
+statsmodels>=0.14,<1
+matplotlib>=3.9,<4
+seaborn>=0.13,<1
+plotly>=6,<7
+datasets>=4,<6
+jupyterlab>=4.3,<5
+nbconvert>=7.16,<8
+ipykernel>=6.29,<7
+pytest>=8,<10
+ruff>=0.9,<1
+tqdm>=4.66,<5
