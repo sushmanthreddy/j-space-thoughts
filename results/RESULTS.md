@@ -127,11 +127,20 @@ takes the calibration-limitation fallback without a hypothesis verdict.
 **SKIPPED_PREREQUISITE.** No alpha* exists, so no alpha*-specific recalibration is defined. No model forward was run in notebook
 04. The following alpha*-specific checks therefore remain unmeasured:
 
-- G-SWAP at alpha*: **NOT_EVALUATED_NO_ALPHA**
 - G-DIR at alpha*: **NOT_EVALUATED_NO_ALPHA**
-- capability at alpha*: **NOT_EVALUATED_NO_ALPHA**
 - G-POS at alpha*: **NOT_EVALUATED_NO_ALPHA**
+- G-SWAP at alpha*: **NOT_EVALUATED_NO_ALPHA**
+- capability at alpha*: **NOT_EVALUATED_NO_ALPHA**
 - weight-READ validation at alpha*: **NOT_EVALUATED_NO_ALPHA**
 
 Stage-0 G-DIR re-verification is retained as an instrument sentinel, but it is
 not relabeled as a Stage-2 result at a nonexistent alpha*.
+
+## Stage 3 — science prerequisite records
+
+| notebook | preregistered scope | result |
+| --- | --- | --- |
+| 05_science_twohop.ipynb | P1 and P2 | SKIPPED_PREREQUISITE |
+
+These notebooks are executed model-free guards. They do not import historical
+science values or treat missing measurements as negative effects.
