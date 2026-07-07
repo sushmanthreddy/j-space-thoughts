@@ -105,3 +105,36 @@ retrieval. No held-out MD result entered that selection.
 
 Stage-3 science remains prohibited pending READ validation, firing controls,
 and G-POS.
+
+## Stage 1d — READ repair and validation
+
+The old `r=-0.36` label conflated two quantities: it compared the signed
+first-order product `-sum(WRITE*READ)` with a large full ablation, not READ
+magnitude with causal damage. V2 separates local gradient plumbing, the
+nonlinear endpoint, and READ-strength association.
+
+- Exact shared-alpha derivative check on the three G-SWAP cases: **PASS**.
+- Attribution prediction vs local dose slope: r=0.173, 95% CI [-0.374, 0.701], N=20.
+- Attribution prediction vs full alpha=1 ablation: r=0.062, 95% CI [-0.406, 0.482], N=20.
+- Attribution READ magnitude vs positive damage: r=-0.187, 95% CI [-0.469, 0.156].
+- Partial READ-magnitude association given WRITE: r=-0.009, 95% CI [-0.341, 0.301].
+
+Weight READ now feeds block `k` with `v[k-1]` and evaluates output/label
+orientation against `v[k]`; the legacy code incorrectly reused one source-layer
+vector at every downstream block. Components are flagged by attribution on the
+three clear calibration cases, then evaluated against 32 seeded random
+directions.
+
+- Weight calibration: **PASS**; above-random in 2/3 cases. Positive MLP+attention orientation occurs in 1/3 and is diagnostic only because weight magnitude is unsigned.
+- MLP attribution/weight rank rho=0.600 (N=6).
+- Attention attribution/weight rank rho=0.839 (N=12).
+
+### READ decision
+
+**PASS — primary READ: WEIGHT_BASED; attribution role:
+SECONDARY.** Weight magnitude is unsigned; signed label orientation is a
+separate diagnostic and is not mislabeled as behavioral attribution.
+
+![Repaired attribution validation](figures/f5_repaired_read_validation.png)
+
+Stage-3 science remains prohibited until firing controls and G-POS pass.

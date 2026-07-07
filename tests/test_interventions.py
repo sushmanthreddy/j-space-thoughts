@@ -24,6 +24,17 @@ def test_ablation_zeros_selected_coordinate_only() -> None:
     assert edited.dtype == hidden.dtype
 
 
+def test_scaled_ablation_interpolates_and_supports_negative_steering() -> None:
+    hidden = torch.tensor([[[2.0, 3.0, 4.0]]])
+    direction = torch.tensor([1.0, 0.0, 0.0])
+    half = ablate_direction(hidden, direction, strength=0.5)
+    doubled = ablate_direction(hidden, direction, strength=2.0)
+    negative = ablate_direction(hidden, direction, strength=-1.0)
+    assert torch.equal(half, torch.tensor([[[1.0, 3.0, 4.0]]]))
+    assert torch.equal(doubled, torch.tensor([[[-2.0, 3.0, 4.0]]]))
+    assert torch.equal(negative, torch.tensor([[[4.0, 3.0, 4.0]]]))
+
+
 def test_nonorthogonal_swap_is_exact_and_preserves_orthogonal_part() -> None:
     concept = torch.tensor([1.0, 0.0, 0.0])
     foil = torch.tensor([0.5, 0.5, 0.0])

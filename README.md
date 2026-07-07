@@ -8,8 +8,8 @@ concept swap and the positive/control gates pass.
 
 ## Current status
 
-**G-SWAP and G-DIR pass; READ/control calibration is still incomplete and
-there is no v2 science verdict.** The earlier
+**G-SWAP, G-DIR, and repaired READ validation pass; control/G-POS calibration
+is still incomplete and there is no v2 science verdict.** The earlier
 `NOT SUPPORTED` and `REFUTED` labels at commit
 `6666385cff42fe4053412e7230ec9f55b0259f79` are retained only as legacy
 diagnostics. Both old model scales failed the strict spider→ant top-1 swap,
@@ -40,6 +40,15 @@ suffix). Forty-way held-out retrieval is 44/80 (55.0%; chance 2.5%), and a
 probe form selected on training cues reaches 71/80 (88.75%) exact-token top-5
 on held-out cues. Mean cosine with the exact-label raw J-Lens direction is only
 0.132 at L24, so the two families are validated but materially different.
+
+Notebook 03 verifies attribution's shared-strength derivative against exact
+autograd to about `1e-6`, but finds unreliable local finite-dose (`r=0.173`)
+and full-alpha-1 endpoint (`r=0.062`) correlations. Attribution is therefore
+secondary. Layer-aligned, random-normalized weight READ is primary: its
+clear-case magnitudes are above random in 2/3 cases, while repaired
+attribution/weight rank correlations are positive for MLPs (`rho=0.600`) and
+attention (`rho=0.839`). Signed label orientation is retained as a diagnostic,
+not mislabeled as the sign of an unsigned magnitude.
 
 ## Definitions and signs
 

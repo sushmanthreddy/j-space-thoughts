@@ -36,8 +36,9 @@ def ablate_direction(
     direction: torch.Tensor,
     *,
     positions: Sequence[int] | None = None,
+    strength: float = 1.0,
 ) -> torch.Tensor:
-    """Remove one unit direction at selected positions of ``[B, S, D]``."""
+    """Remove a scaled unit-direction coordinate from selected positions."""
 
     if hidden.ndim != 3:
         raise ValueError(f"Expected hidden shape [B, S, D], got {tuple(hidden.shape)}")
@@ -47,12 +48,14 @@ def ablate_direction(
         norm, torch.ones((), device=norm.device), atol=1e-4, rtol=1e-4
     ):
         raise ValueError(f"Ablation direction must be unit norm, got {float(norm)}")
+    if not torch.isfinite(torch.tensor(strength)):
+        raise ValueError(f"Ablation strength must be finite, got {strength}")
 
     indices = _resolved_positions(hidden.shape[1], positions)
     edited = hidden.clone()
     selected = hidden[:, indices, :].float()
     projection = torch.einsum("bsd,d->bs", selected, vector)
-    replacement = selected - projection.unsqueeze(-1) * vector
+    replacement = selected - float(strength) * projection.unsqueeze(-1) * vector
     edited[:, indices, :] = replacement.to(hidden.dtype)
     return edited
 
@@ -199,13 +202,14 @@ def ablation_edits(
     directions: Mapping[int, torch.Tensor],
     *,
     positions: Sequence[int] | None = None,
+    strength: float = 1.0,
 ) -> dict[int, TensorEdit]:
-    """Create one post-block ablation closure per layer."""
+    """Create one scaled post-block ablation closure per layer."""
 
     return {
         layer: (
             lambda hidden, vector=direction: ablate_direction(
-                hidden, vector, positions=positions
+                hidden, vector, positions=positions, strength=strength
             )
         )
         for layer, direction in directions.items()

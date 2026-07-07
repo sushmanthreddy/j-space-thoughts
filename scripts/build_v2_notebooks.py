@@ -336,17 +336,105 @@ print('Notebook 02 complete. Next: READ validation; science remains prohibited.'
     return target
 
 
+def build_stage3() -> Path:
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            """# 03 — Repair READ estimators and validate attribution
+
+This notebook separates three quantities previously conflated as one READ
+test: the exact local attribution derivative, a measured small-dose slope, and
+the nonlinear full-ablation endpoint. It also fixes weight READ's layer bug by
+feeding block `k` with `v[k-1]` and evaluating output orientation against
+`v[k]`. Weight magnitude remains unsigned and selection-conditioned."""
+        ),
+        nbformat.v4.new_code_cell(
+            """import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+os.environ['HF_HOME'] = str(Path.home() / '.cache/huggingface')
+os.environ['HF_HUB_CACHE'] = str(Path.home() / '.cache/huggingface/hub')
+os.environ['HUGGINGFACE_HUB_CACHE'] = str(Path.home() / '.cache/huggingface/hub')
+
+metrics = json.loads((ROOT / 'results/metrics.json').read_text())
+repair = metrics['repair_v2']
+assert repair['gate_ledger']['g_swap'] == 'PASS'
+assert repair['gate_ledger']['g_dir'] in {'PASS', 'DROPPED_MD'}
+workspace_layers = repair['stage1']['g_swap']['canonical_configuration']['layers']
+
+from src.jlens_iface import load_published_lens
+from src.model_utils import load_model
+from src.v2_repair import MODEL_ID
+
+bundle = load_model(MODEL_ID)
+lens = load_published_lens(MODEL_ID)
+print('READ validation band:', workspace_layers)"""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v2_read import run_stage1d
+
+stage1d = run_stage1d(bundle, lens, workspace_layers=workspace_layers)
+a = stage1d['attribution']
+w = stage1d['weight_read']
+print({
+    'READ status': stage1d['status'],
+    'primary': stage1d['primary_read'],
+    'attribution_role': a['role'],
+    'exact_derivative_plumbing': a['plumbing_pass_abs_error_le_0.05'],
+    'local_r': a['correlations']['predicted_vs_local_slope']['estimate'],
+    'full_alpha1_r': a['correlations']['predicted_vs_full_alpha1_delta']['estimate'],
+    'read_strength_r': a['correlations']['read_strength_vs_positive_damage']['estimate'],
+    'weight_status': w['status'],
+    'weight_above_random_cases': w['n_above_random_cases'],
+    'weight_positive_orientation_cases': w['n_positive_orientation_cases'],
+})
+print('weight criteria:', w['criteria'])"""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v2_read import persist_stage1d
+
+metrics = persist_stage1d(stage1d)
+gate = metrics['repair_v2']['gate_ledger']['read_validation']
+print('Persisted READ validation:', gate)
+assert gate in {'PASS', 'FAIL'}
+assert metrics['repair_v2']['gate_ledger']['stage3_science'] == 'PROHIBITED'"""
+        ),
+        nbformat.v4.new_code_cell(
+            """import gc
+import torch
+
+del stage1d, metrics, lens, bundle
+gc.collect()
+torch.cuda.empty_cache()
+print('Notebook 03 complete. Controls/G-POS are next only if READ passed.')"""
+        ),
+    ]
+    target = ROOT / "notebooks" / "03_read_and_validation.ipynb"
+    nbformat.write(notebook, target)
+    return target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "notebooks",
         nargs="*",
-        choices=("00", "01", "02"),
-        default=("00", "01", "02"),
+        choices=("00", "01", "02", "03"),
+        default=("00", "01", "02", "03"),
         help="Notebook numbers to rebuild; specify one to preserve other outputs.",
     )
     arguments = parser.parse_args()
-    builders = {"00": build_stage0, "01": build_stage1, "02": build_stage2}
+    builders = {
+        "00": build_stage0,
+        "01": build_stage1,
+        "02": build_stage2,
+        "03": build_stage3,
+    }
     targets = [builders[name]() for name in arguments.notebooks]
     print(json.dumps([str(path.relative_to(ROOT)) for path in targets], indent=2))
 
