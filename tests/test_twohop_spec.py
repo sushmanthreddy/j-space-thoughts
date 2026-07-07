@@ -152,7 +152,7 @@ def test_header_and_schema(payload: dict, items: list[dict]) -> None:
         "581d398613e5602a5af361e1c34d3a92ea82ba8e"
     )
     assert provenance["target_tokenizer_revision"] == TOKENIZER_REVISION
-    assert provenance["supplement_item_count"] == len(items) == 206
+    assert provenance["supplement_item_count"] == len(items) == 236
 
     for item in items:
         assert set(item) == REQUIRED_ITEM_FIELDS
@@ -190,8 +190,8 @@ def test_factual_tables_and_matched_reciprocal_foils(items: list[dict]) -> None:
     assert actual_relations == EXPECTED_RELATIONS
     assert Counter(item["category"] for item in items) == {
         "atomic-number-element-symbol": 20,
-        "us-city-state-capital": 90,
-        "city-country-capital": 96,
+        "us-city-state-capital": 104,
+        "city-country-capital": 112,
     }
 
     pair_counts = Counter(
@@ -245,8 +245,8 @@ def test_combined_with_pinned_upstream_has_at_least_150_distinct_prompts(
     assert len(upstream_prompts) == provenance["upstream_distinct_prompt_count"] == 86
     assert upstream_prompts.isdisjoint(supplemental_prompts)
     combined = upstream_prompts | supplemental_prompts
-    assert len(upstream) + len(items) == provenance["combined_item_count"] == 296
-    assert len(combined) == provenance["combined_distinct_prompt_count"] == 292
+    assert len(upstream) + len(items) == provenance["combined_item_count"] == 326
+    assert len(combined) == provenance["combined_distinct_prompt_count"] == 322
     assert len(combined) >= 150
 
 
@@ -254,22 +254,22 @@ def test_robust_loaders_preserve_provenance_and_audit_deduplication(
     payload: dict,
 ) -> None:
     supplemental = load_twohop_supplement_items()
-    assert len(supplemental) == payload["provenance"]["supplement_item_count"] == 206
+    assert len(supplemental) == payload["provenance"]["supplement_item_count"] == 236
     assert all(item["source"] == SUPPLEMENT_TWOHOP_SOURCE for item in supplemental)
     assert all(item["dataset_provenance"]["seed"] == 1729 for item in supplemental)
 
     collection = load_combined_twohop_collection()
     combined = load_combined_twohop_items()
     assert collection["items"] == combined
-    assert len(combined) == 292
-    assert len({normalize_twohop_prompt(item["prompt"]) for item in combined}) == 292
+    assert len(combined) == 322
+    assert len({normalize_twohop_prompt(item["prompt"]) for item in combined}) == 322
     audit = collection["provenance"]
     assert audit["counts"] == {
         "upstream_item_count": 90,
         "upstream_distinct_prompt_count": 86,
-        "supplement_item_count": 206,
-        "combined_item_count": 296,
-        "combined_distinct_prompt_count": 292,
+        "supplement_item_count": 236,
+        "combined_item_count": 326,
+        "combined_distinct_prompt_count": 322,
     }
     assert len(audit["duplicates_removed"]) == 4
     assert {record["dropped_name"] for record in audit["duplicates_removed"]} == {
@@ -318,9 +318,9 @@ def test_qwen_single_token_concept_and_answer_proxies(items: list[dict]) -> None
         assert set(concept_ids).isdisjoint(answer_ids)
 
     accepted, rejected = tokenizable_combined_twohop_items(tokenizer)
-    assert len(accepted) == 269
+    assert len(accepted) == 299
     assert len(rejected) == 23
-    assert len(accepted) + len(rejected) == 292
+    assert len(accepted) + len(rejected) == 322
     supplemental_names = {item["name"] for item in items}
     accepted_names = {item["name"] for item in accepted}
     rejected_names = {item["name"] for item in rejected}
