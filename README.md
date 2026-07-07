@@ -8,8 +8,8 @@ concept swap and the positive/control gates pass.
 
 ## Current status
 
-**G-SWAP passes; calibration is still incomplete and there is no v2 science
-verdict.** The earlier
+**G-SWAP and G-DIR pass; READ/control calibration is still incomplete and
+there is no v2 science verdict.** The earlier
 `NOT SUPPORTED` and `REFUTED` labels at commit
 `6666385cff42fe4053412e7230ec9f55b0259f79` are retained only as legacy
 diagnostics. Both old model scales failed the strict spider→ant top-1 swap,
@@ -32,6 +32,14 @@ counterfactual for all three predeclared upstream cases: spider→ant (`8→6`),
 buffalo→spider (`four→eight`), and oxygen→nitrogen (`8→7`). Each was repeated
 three times with identical logits. This licenses G-DIR and READ validation,
 not the science notebooks.
+
+Notebook 02 validates the independent MD direction after a train-only
+leave-one-template-out search chooses L24 and the mean residual over the last
+four tokenizer tokens belonging to the clue (before the common instruction
+suffix). Forty-way held-out retrieval is 44/80 (55.0%; chance 2.5%), and a
+probe form selected on training cues reaches 71/80 (88.75%) exact-token top-5
+on held-out cues. Mean cosine with the exact-label raw J-Lens direction is only
+0.132 at L24, so the two families are validated but materially different.
 
 ## Definitions and signs
 

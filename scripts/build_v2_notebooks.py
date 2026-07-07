@@ -254,17 +254,99 @@ print('Notebook 01 complete. Stage-3 science remains prohibited.')"""
     return target
 
 
+def build_stage2() -> Path:
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            """# 02 — Repair and validate the independent concept finder
+
+G-SWAP has passed, so this notebook may build the mean-difference (MD)
+direction family. It reuses the leakage-audited 40-concept cue manifest, then
+selects residual pooling and layer by leave-one-training-template-out retrieval
+inside the clean-readout-selected Stage-1 workspace. Explicit probe wording is
+also selected on training cues only; held-out cues decide G-DIR."""
+        ),
+        nbformat.v4.new_code_cell(
+            """import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+os.environ['HF_HOME'] = str(Path.home() / '.cache/huggingface')
+os.environ['HF_HUB_CACHE'] = str(Path.home() / '.cache/huggingface/hub')
+os.environ['HUGGINGFACE_HUB_CACHE'] = str(Path.home() / '.cache/huggingface/hub')
+
+metrics = json.loads((ROOT / 'results/metrics.json').read_text())
+repair = metrics['repair_v2']
+assert repair['gate_ledger']['g_swap'] == 'PASS'
+workspace_layers = repair['stage1']['g_swap']['canonical_configuration']['layers']
+
+from src.jlens_iface import load_published_lens
+from src.model_utils import load_model
+from src.v2_repair import MODEL_ID
+
+bundle = load_model(MODEL_ID)
+lens = load_published_lens(MODEL_ID)
+print('workspace layers fixed before MD heldout evaluation:', workspace_layers)"""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v2_concept import run_stage1c
+
+stage1c = run_stage1c(bundle, lens, workspace_layers=workspace_layers)
+r = stage1c['retrieval']['top1_at_fixed_layer']
+e = stage1c['explicit_known_answer']
+a = stage1c['cosine_alignment']['raw_WU_J']['fixed_layer']
+print({
+    'G-DIR': stage1c['status'],
+    'pooling': stage1c['position_selection']['selected_pooling'],
+    'fixed_layer': stage1c['fixed_validation_layer'],
+    'retrieval_top1': r['estimate'],
+    'retrieval_ci': [r['ci_low'], r['ci_high']],
+    'chance': stage1c['chance_retrieval'],
+    'explicit_template': e['selected_template'],
+    'heldout_exact_top5': e['heldout_top5']['estimate'],
+    'cosine_md_raw_jlens': a['estimate'],
+})
+print('criteria:', stage1c['criteria'])"""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v2_concept import persist_stage1c
+
+metrics = persist_stage1c(stage1c)
+gate = metrics['repair_v2']['gate_ledger']['g_dir']
+print('Persisted G-DIR:', gate)
+assert gate in {'PASS', 'DROPPED_MD'}
+assert metrics['repair_v2']['gate_ledger']['stage3_science'] == 'PROHIBITED'"""
+        ),
+        nbformat.v4.new_code_cell(
+            """import gc
+import torch
+
+del stage1c, metrics, lens, bundle
+gc.collect()
+torch.cuda.empty_cache()
+print('Notebook 02 complete. Next: READ validation; science remains prohibited.')"""
+        ),
+    ]
+    target = ROOT / "notebooks" / "02_concept_finder.ipynb"
+    nbformat.write(notebook, target)
+    return target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "notebooks",
         nargs="*",
-        choices=("00", "01"),
-        default=("00", "01"),
+        choices=("00", "01", "02"),
+        default=("00", "01", "02"),
         help="Notebook numbers to rebuild; specify one to preserve other outputs.",
     )
     arguments = parser.parse_args()
-    builders = {"00": build_stage0, "01": build_stage1}
+    builders = {"00": build_stage0, "01": build_stage1, "02": build_stage2}
     targets = [builders[name]() for name in arguments.notebooks]
     print(json.dumps([str(path.relative_to(ROOT)) for path in targets], indent=2))
 
