@@ -232,8 +232,9 @@ def run_g2(bundle: ModelBundle, lens: Any, layers: list[int]) -> dict:
     )
     if not strict_pass:
         print(
-            "G2 failure documented: Qwen-7B does not reproduce the strict known-answer "
-            "top-1 swap under the preregistered band. Downstream 7B results are diagnostic."
+            f"G2 failure documented: {bundle.model_id} does not reproduce the strict "
+            "known-answer top-1 swap under the preregistered band. Downstream results "
+            "at this scale are diagnostic."
         )
     return summary
 
