@@ -972,11 +972,102 @@ print(json.dumps({
     return target
 
 
+def build_science_skip(number: str) -> Path:
+    definitions = {
+        "12": {
+            "filename": "12_science_twohop.ipynb",
+            "scope": "P1/P2 two-hop and narration science",
+            "metric_key": "stage12_science_twohop",
+            "prior": None,
+        },
+        "13": {
+            "filename": "13_science_ambiguity.ipynb",
+            "scope": "P3 ambiguity science",
+            "metric_key": "stage13_science_ambiguity",
+            "prior": "stage12_science_twohop",
+        },
+    }
+    definition = definitions[number]
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    prior_assertion = (
+        ""
+        if definition["prior"] is None
+        else (
+            f"assert v4['{definition['prior']}']['status'] == "
+            "'SKIPPED_PREREQUISITE'\n"
+        )
+    )
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            f"""# {number} — {definition['scope']} prerequisite record
+
+G-READVAL failed, so Stage A is prohibited. This executed notebook records the
+required model-free skip. It does not load a model, calculate P1/P2/P3, inspect
+ambiguity distinguishability, or import historical science values."""
+        ),
+        nbformat.v4.new_code_cell(
+            f"""import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+
+from src.metrics import save_json
+from src.v3_reverify import _repair_v2_sha256
+
+metrics_path = ROOT / 'results/metrics.json'
+metrics = json.loads(metrics_path.read_text())
+v4 = metrics['calibration_v4']
+assert v4['gate_ledger']['g_readval'] == 'FAIL'
+assert v4['gate_ledger']['stage_a_science'] == 'SKIPPED_PREREQUISITE'
+assert v4['stage11_readval']['g_readval'] == 'FAIL'
+{prior_assertion}assert _repair_v2_sha256(metrics['repair_v2']) == metrics['calibration_v3']['provenance']['repair_v2_sha256']
+
+entry = {{
+    'status': 'SKIPPED_PREREQUISITE',
+    'scope': '{definition['scope']}',
+    'reason': 'G-READVAL failed; Stage A science is prohibited',
+    'model_forward_run': False,
+    'science_values_loaded': False,
+    'hypothesis_inference_made': False,
+}}
+v4['{definition['metric_key']}'] = entry
+save_json(metrics_path, metrics)
+
+report_path = ROOT / 'results/RESULTS.md'
+report = report_path.read_text()
+marker = '\\n## Notebook {number} —'
+if marker in report:
+    report = report.split(marker, 1)[0].rstrip() + '\\n'
+section = '''
+## Notebook {number} — {definition['scope']}
+
+**SKIPPED_PREREQUISITE.** G-READVAL failed. This notebook executed a model-free
+guard; no hypothesis science or historical science values were run.
+'''
+report_path.write_text(report.rstrip() + section, encoding='utf-8')
+print(json.dumps(entry, indent=2))
+print('Notebook {number} complete. No science was run.')"""
+        ),
+    ]
+    target = ROOT / "notebooks" / definition["filename"]
+    nbformat.write(notebook, target)
+    return target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("notebook", choices=("10", "11"))
+    parser.add_argument("notebook", choices=("10", "11", "12", "13"))
     arguments = parser.parse_args()
-    builders = {"10": build_notebook10, "11": build_notebook11}
+    builders = {
+        "10": build_notebook10,
+        "11": build_notebook11,
+        "12": lambda: build_science_skip("12"),
+        "13": lambda: build_science_skip("13"),
+    }
     target = builders[arguments.notebook]()
     print(json.dumps({"built": str(target.relative_to(ROOT))}, indent=2))
 

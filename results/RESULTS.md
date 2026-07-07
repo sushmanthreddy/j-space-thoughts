@@ -87,3 +87,7 @@ Notebook 11 must now apply the frozen G-READVAL bars. No hypothesis science has 
 The new estimator is selection-conditioned on exact path patching for the same behavior metric, but path discovery used a distinct source-only deletion rather than the causal swap endpoint. No threshold or alpha was tuned after outcomes.
 
 Raw gate artifact: `data/raw/v4/11_readval_gate.json` (SHA-256 `abcf605278a4c9b82643e093038ecb3c06455310db34d692dd84bb9c67ab3360`).
+## Notebook 12 — P1/P2 two-hop and narration science
+
+**SKIPPED_PREREQUISITE.** G-READVAL failed. This notebook executed a model-free
+guard; no hypothesis science or historical science values were run.
