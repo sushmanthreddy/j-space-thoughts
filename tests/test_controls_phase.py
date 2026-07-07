@@ -48,7 +48,9 @@ def test_random_null_bank_is_seeded_unit_norm_and_all_layer() -> None:
     assert set(first) == set(references)
     assert first_seeds == repeated_seeds
     assert all(torch.equal(first[layer], repeated[layer]) for layer in first)
-    assert all(torch.isclose(vector.norm(), torch.tensor(1.0)) for vector in first.values())
+    assert all(
+        torch.isclose(vector.norm(), torch.tensor(1.0)) for vector in first.values()
+    )
     assert any(not torch.equal(first[layer], different[layer]) for layer in first)
     assert first_seeds[2] != first_seeds[3]
 
@@ -179,9 +181,7 @@ def test_bootstrap_control_aggregates_use_items_as_units() -> None:
     assert random_summary["bootstrap_unit"].startswith("item")
     assert random_summary["n_items"] == 4
     assert random_summary["n_draws_total"] == 8
-    assert random_summary["paired_mean_abs_observed_minus_random"][
-        "estimate"
-    ] > 0
+    assert random_summary["paired_mean_abs_observed_minus_random"]["estimate"] > 0
 
 
 def test_teacher_forced_nll_matches_manual_targets_and_masks_padding() -> None:
@@ -230,9 +230,7 @@ def test_core_suppression_adapter_requires_finite_explicit_values() -> None:
             "predicted_delta": -1.0,
         },
     ]
-    adapted = assert_output_suppression_complete(
-        rows, expected_item_names=["a", "b"]
-    )
+    adapted = assert_output_suppression_complete(rows, expected_item_names=["a", "b"])
     assert [row["suppression_delta"] for row in adapted] == [0.0, 0.25]
     assert adapted[1]["name"] == "b"
 

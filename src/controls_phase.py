@@ -59,7 +59,11 @@ KNOWN_NARRATION_LOW_CAUSAL_MAX_GAP = 0.5
 KNOWN_NARRATION_CLEAN_MARGIN_MIN = 0.0
 KNOWN_NARRATION_MIN_REPRODUCED = 6
 DEFAULT_NARRATION_SOURCE = (
-    Path.home() / "deps" / "jacobian-lens" / "data" / "experiments"
+    Path.home()
+    / "deps"
+    / "jacobian-lens"
+    / "data"
+    / "experiments"
     / "selectivity-language.json"
 )
 
@@ -185,8 +189,7 @@ def adapt_core_control_rows(
             suppression_key = "suppression_delta"
         else:
             raise ValueError(
-                f"Core row {name!r} lacks suppression_delta or "
-                "output_suppression_delta"
+                f"Core row {name!r} lacks suppression_delta or output_suppression_delta"
             )
         try:
             suppression_value = float(suppression)
@@ -195,9 +198,7 @@ def adapt_core_control_rows(
                 f"Core row {name!r} has nonnumeric {suppression_key}"
             ) from exc
         if not math.isfinite(suppression_value):
-            raise ValueError(
-                f"Core row {name!r} has nonfinite {suppression_key}"
-            )
+            raise ValueError(f"Core row {name!r} has nonfinite {suppression_key}")
         adapted.append(
             {
                 "row_index": index,
@@ -624,7 +625,9 @@ def summarize_random_direction_null(
         null_mean.append(float(draws.mean()))
         null_abs_mean.append(float(np.abs(draws).mean()))
         if row.get("observed_concept_delta") is None:
-            raise ValueError("Paired random-null summary requires every observed effect")
+            raise ValueError(
+                "Paired random-null summary requires every observed effect"
+            )
         value = float(row["observed_concept_delta"])
         if not math.isfinite(value):
             raise ValueError("Observed concept effects must be finite")
@@ -685,7 +688,9 @@ def teacher_forced_nll(
     if logits.ndim != 3 or input_ids.ndim != 2:
         raise ValueError("Expected logits [B,S,V] and input_ids [B,S]")
     if logits.shape[:2] != input_ids.shape or input_ids.shape[1] < 2:
-        raise ValueError("Logits/input shapes must align and contain at least two tokens")
+        raise ValueError(
+            "Logits/input shapes must align and contain at least two tokens"
+        )
     if attention_mask is None:
         attention_mask = torch.ones_like(input_ids)
     if attention_mask.shape != input_ids.shape:
@@ -699,9 +704,13 @@ def teacher_forced_nll(
     counts = valid.sum(dim=-1)
     if (counts == 0).any():
         raise ValueError("Every sequence needs at least one unmasked next-token target")
-    token_nll = -logits[:, :-1].float().log_softmax(dim=-1).gather(
-        dim=-1, index=labels.unsqueeze(-1)
-    ).squeeze(-1)
+    token_nll = (
+        -logits[:, :-1]
+        .float()
+        .log_softmax(dim=-1)
+        .gather(dim=-1, index=labels.unsqueeze(-1))
+        .squeeze(-1)
+    )
     masked_nll = torch.where(valid, token_nll, torch.zeros_like(token_nll))
     return masked_nll.sum(dim=-1) / counts
 
@@ -935,16 +944,16 @@ def run_absent_swap_controls(
         second_selection = pair_audit["second"]
         pair_selection = pair_audit if pair_audit["status"] == "eligible" else None
         second_id = (
-            int(second_selection["token_id"])
-            if second_selection is not None
-            else None
+            int(second_selection["token_id"]) if second_selection is not None else None
         )
         selected_ids = [first_id]
         if second_id is not None:
             selected_ids.append(second_id)
         for token_id in selected_ids:
             if token_id not in candidate_direction_banks:
-                raise KeyError(f"No direction bank for selected absent token {token_id}")
+                raise KeyError(
+                    f"No direction bank for selected absent token {token_id}"
+                )
 
         clean_logits = forward_logits(bundle.hf_model, input_ids)
         clean_metric = _behavior_metric(clean_logits, item)
@@ -971,9 +980,7 @@ def run_absent_swap_controls(
                 "prompt_token_ids": prompt_token_ids,
             },
             "all_candidate_ranks": {
-                str(token_id): {
-                    str(layer): ranks for layer, ranks in per_layer.items()
-                }
+                str(token_id): {str(layer): ranks for layer, ranks in per_layer.items()}
                 for token_id, per_layer in rank_map.items()
             },
         }
@@ -1032,9 +1039,7 @@ def run_absent_swap_controls(
                 **shared,
                 "selected_absent_token_id": first_id,
                 "selected_absent_surface": (
-                    token_surfaces.get(first_id)
-                    if token_surfaces is not None
-                    else None
+                    token_surfaces.get(first_id) if token_surfaces is not None else None
                 ),
                 "selection": first_selection,
                 **behavior_effect_record(clean_metric, stress_metric),
@@ -1180,6 +1185,8 @@ def run_capability_controls(
     texts: Sequence[Mapping[str, str]] = CAPABILITY_TEXTS_V1,
     max_interventions: int | None = None,
     twohop_tasks_per_intervention: int = 4,
+    n_bootstrap: int = 5000,
+    seed: int = SEED,
 ) -> dict[str, Any]:
     """Measure fixed-text NLL/perplexity and two-hop accuracy under ablation."""
 
@@ -1237,9 +1244,7 @@ def run_capability_controls(
             blocks=bundle.lens_model.layers,
             edits=ablation_edits(direction_banks[name]),
         )
-        edited_nll = teacher_forced_nll(
-            edited_logits, input_ids, attention_mask
-        ).cpu()
+        edited_nll = teacher_forced_nll(edited_logits, input_ids, attention_mask).cpu()
         edited_ppl = _perplexities(edited_nll)
         for text_index, text in enumerate(texts):
             language_rows.append(
@@ -1252,8 +1257,7 @@ def run_capability_controls(
                     "delta_nll": float(edited_nll[text_index] - clean_nll[text_index]),
                     "clean_perplexity": clean_ppl[text_index],
                     "edited_perplexity": edited_ppl[text_index],
-                    "delta_perplexity": edited_ppl[text_index]
-                    - clean_ppl[text_index],
+                    "delta_perplexity": edited_ppl[text_index] - clean_ppl[text_index],
                 }
             )
 
@@ -1288,6 +1292,47 @@ def run_capability_controls(
                 }
             )
 
+    def intervention_means(
+        rows: Sequence[Mapping[str, Any]],
+        field: str,
+    ) -> list[float]:
+        return [
+            float(
+                np.mean(
+                    [
+                        float(row[field])
+                        for row in rows
+                        if row["intervention_item"] == item_name
+                    ]
+                )
+            )
+            for item_name in [_item_name(item) for item in selected_items]
+        ]
+
+    def mean_ci(values: Sequence[float], statistic_seed: int) -> dict[str, Any]:
+        result = bootstrap_statistic(
+            [values],
+            lambda array: float(np.mean(array)),
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=statistic_seed,
+        )
+        return {"status": "ESTIMATED", **result}
+
+    language_clean_by_intervention = intervention_means(language_rows, "clean_nll")
+    language_edited_by_intervention = intervention_means(language_rows, "edited_nll")
+    language_delta_by_intervention = intervention_means(language_rows, "delta_nll")
+    task_clean_by_intervention = intervention_means(twohop_rows, "clean_top1_correct")
+    task_edited_by_intervention = intervention_means(twohop_rows, "edited_top1_correct")
+    task_delta_by_intervention = [
+        edited - clean
+        for clean, edited in zip(
+            task_clean_by_intervention,
+            task_edited_by_intervention,
+            strict=True,
+        )
+    ]
+
     return {
         "text_set": "CAPABILITY_TEXTS_V1",
         "n_fixed_texts": len(texts),
@@ -1296,6 +1341,8 @@ def run_capability_controls(
         "general_language": {
             "metric": "mean teacher-forced next-token NLL; perplexity=exp(NLL)",
             "rows": language_rows,
+            "n_rows": len(language_rows),
+            "bootstrap_unit": "intervention bank; average the 8 fixed texts within bank",
             "mean_clean_nll": float(
                 np.mean([row["clean_nll"] for row in language_rows])
             ),
@@ -1305,6 +1352,11 @@ def run_capability_controls(
             "mean_delta_nll": float(
                 np.mean([row["delta_nll"] for row in language_rows])
             ),
+            "mean_clean_nll_ci": mean_ci(language_clean_by_intervention, seed + 80_000),
+            "mean_edited_nll_ci": mean_ci(
+                language_edited_by_intervention, seed + 80_001
+            ),
+            "mean_delta_nll_ci": mean_ci(language_delta_by_intervention, seed + 80_002),
         },
         "twohop": {
             "metric": (
@@ -1317,11 +1369,21 @@ def run_capability_controls(
                 "roles, literal source concept terms, and literal source token IDs"
             ),
             "rows": twohop_rows,
+            "n_rows": len(twohop_rows),
+            "bootstrap_unit": (
+                "intervention bank; average the deterministic off-target tasks "
+                "within bank"
+            ),
             "clean_accuracy": float(
                 np.mean([row["clean_top1_correct"] for row in twohop_rows])
             ),
             "edited_accuracy": float(
                 np.mean([row["edited_top1_correct"] for row in twohop_rows])
+            ),
+            "clean_accuracy_ci": mean_ci(task_clean_by_intervention, seed + 80_003),
+            "edited_accuracy_ci": mean_ci(task_edited_by_intervention, seed + 80_004),
+            "edited_minus_clean_accuracy_ci": mean_ci(
+                task_delta_by_intervention, seed + 80_005
             ),
         },
     }
@@ -1363,7 +1425,10 @@ def _magnitude_summary(values_by_layer: Mapping[int, np.ndarray]) -> dict[str, A
     if not values_by_layer:
         raise ValueError("WRITE/READ magnitude summary requires at least one layer")
     flattened = np.concatenate(
-        [np.asarray(values, dtype=float).reshape(-1) for values in values_by_layer.values()]
+        [
+            np.asarray(values, dtype=float).reshape(-1)
+            for values in values_by_layer.values()
+        ]
     )
     if not flattened.size or not np.isfinite(flattened).all():
         raise ValueError("WRITE/READ arrays must be finite and nonempty")
@@ -1392,18 +1457,17 @@ def known_narration_reproduction_summary(
         for row in rows
     ]
     for row, expected in zip(rows, joint, strict=True):
-        if "reproduces_known_narration" in row and bool(
-            row["reproduces_known_narration"]
-        ) != expected:
+        if (
+            "reproduces_known_narration" in row
+            and bool(row["reproduces_known_narration"]) != expected
+        ):
             raise ValueError("Inconsistent known-narration joint criterion flag")
     reproduced = sum(joint)
     high_write = sum(bool(row["high_write"]) for row in rows)
     low_causal = sum(bool(row["low_causal"]) for row in rows)
     clean_capable = sum(bool(row["clean_capable"]) for row in rows)
     return {
-        "status": (
-            "PASS" if reproduced >= KNOWN_NARRATION_MIN_REPRODUCED else "FAIL"
-        ),
+        "status": ("PASS" if reproduced >= KNOWN_NARRATION_MIN_REPRODUCED else "FAIL"),
         "n_passages": len(rows),
         "n_high_write": high_write,
         "n_low_causal": low_causal,
@@ -1419,9 +1483,7 @@ def known_narration_reproduction_summary(
         "thresholds": {
             "high_write_max_min_jlens_rank": KNOWN_NARRATION_HIGH_WRITE_MAX_RANK,
             "low_causal_max_abs_delta_gap": KNOWN_NARRATION_LOW_CAUSAL_MAX_GAP,
-            "clean_capability_min_exclusive_margin": (
-                KNOWN_NARRATION_CLEAN_MARGIN_MIN
-            ),
+            "clean_capability_min_exclusive_margin": (KNOWN_NARRATION_CLEAN_MARGIN_MIN),
             "minimum_joint_passages": KNOWN_NARRATION_MIN_REPRODUCED,
         },
     }
@@ -1471,9 +1533,7 @@ def run_known_narration_controls(
             ]
             for layer, layer_logits in lens_logits.items()
         }
-        min_label_rank = min(
-            rank for ranks in label_ranks.values() for rank in ranks
-        )
+        min_label_rank = min(rank for ranks in label_ranks.values() for rank in ranks)
         explicit_prompt = payload["task"]["explicit_q"].format(text=passage["text"])
         explicit_lens_logits, _, _ = lens.apply(
             bundle.lens_model,
@@ -1547,8 +1607,7 @@ def run_known_narration_controls(
                 "min_language_label_jlens_rank": min_label_rank,
                 "high_write": high_write,
                 "explicit_language_label_jlens_rank_by_layer_position": {
-                    str(layer): ranks
-                    for layer, ranks in explicit_label_ranks.items()
+                    str(layer): ranks for layer, ranks in explicit_label_ranks.items()
                 },
                 "explicit_min_language_label_jlens_rank": explicit_min_label_rank,
                 "clean_metric": clean_metric,
@@ -1629,9 +1688,7 @@ def run_logit_lens_baseline(
     layer_list = sorted(int(layer) for layer in layers)
     for item in items:
         name = _item_name(item)
-        direction = identity_jacobian_direction(
-            weight, int(item["concept_token_id"])
-        )
+        direction = identity_jacobian_direction(weight, int(item["concept_token_id"]))
         directions = {layer: direction for layer in layer_list}
         input_ids = bundle.lens_model.encode(item["prompt"])
         attribution = attribution_read(
@@ -1652,7 +1709,10 @@ def run_logit_lens_baseline(
         clean_metric = _behavior_metric(clean_logits, item)
         ablated_metric = _behavior_metric(ablated_logits, item)
         write_values = np.concatenate(
-            [np.asarray(values, dtype=float).reshape(-1) for values in attribution.write.values()]
+            [
+                np.asarray(values, dtype=float).reshape(-1)
+                for values in attribution.write.values()
+            ]
         )
         rows.append(
             {
@@ -1795,9 +1855,7 @@ def plot_random_null_controls(
 
     set_style()
     null_deltas = [
-        float(draw["delta"])
-        for row in random_results["rows"]
-        for draw in row["draws"]
+        float(draw["delta"]) for row in random_results["rows"] for draw in row["draws"]
     ]
     observed = [
         float(row["observed_concept_delta"])
@@ -1840,9 +1898,7 @@ def plot_internal_vs_output_suppression(
     rows = comparison["rows"]
     if not rows:
         raise ValueError("F3 requires at least one suppression-comparison row")
-    internal = np.asarray(
-        [row["internal_ablation_delta"] for row in rows], dtype=float
-    )
+    internal = np.asarray([row["internal_ablation_delta"] for row in rows], dtype=float)
     output = np.asarray([row["output_suppression_delta"] for row in rows], dtype=float)
     if not np.isfinite(internal).all() or not np.isfinite(output).all():
         raise ValueError("F3 inputs must be finite")
@@ -1854,7 +1910,9 @@ def plot_internal_vs_output_suppression(
         upper += padding
     figure, axis = plt.subplots(figsize=(6.2, 5.2))
     axis.scatter(internal, output, s=38, alpha=0.78, color="#4C78A8", edgecolors="none")
-    axis.plot([lower, upper], [lower, upper], "--", color="0.35", lw=1.2, label="identity")
+    axis.plot(
+        [lower, upper], [lower, upper], "--", color="0.35", lw=1.2, label="identity"
+    )
     axis.axhline(0, color="0.7", lw=0.8)
     axis.axvline(0, color="0.7", lw=0.8)
     axis.text(
@@ -1884,8 +1942,7 @@ def plot_capability_controls(
     set_style()
     figure, axes = plt.subplots(1, 2, figsize=(10.5, 4.5))
     nll_deltas = [
-        float(row["delta_nll"])
-        for row in capability["general_language"]["rows"]
+        float(row["delta_nll"]) for row in capability["general_language"]["rows"]
     ]
     axes[0].hist(
         nll_deltas,
@@ -1904,7 +1961,9 @@ def plot_capability_controls(
         capability["twohop"]["edited_accuracy"],
     ]
     axes[1].bar(["clean", "intervened"], accuracies, color=["#4C78A8", "#E45756"])
-    axes[1].set(ylim=(0, 1), ylabel="exact target top-1 accuracy", title="Two-hop capability")
+    axes[1].set(
+        ylim=(0, 1), ylabel="exact target top-1 accuracy", title="Two-hop capability"
+    )
     return figure, axes
 
 
@@ -2015,7 +2074,9 @@ def run_controls_phase(
         single_token_id(bundle.tokenizer, surface)
         for surface in ABSENT_CONCEPT_SURFACES_V1
     ]
-    candidate_surfaces = dict(zip(candidate_ids, ABSENT_CONCEPT_SURFACES_V1, strict=True))
+    candidate_surfaces = dict(
+        zip(candidate_ids, ABSENT_CONCEPT_SURFACES_V1, strict=True)
+    )
     if len(candidate_ids) != len(set(candidate_ids)):
         raise ValueError("Preregistered absent surfaces do not map to unique tokens")
     candidate_directions = jlens_direction_bank(
@@ -2039,8 +2100,7 @@ def run_controls_phase(
         fold_rms_gain=fold_rms_gain_for_control_labels,
     )
     language_directions = {
-        label: language_by_token[token_id]
-        for label, token_id in language_ids.items()
+        label: language_by_token[token_id] for label, token_id in language_ids.items()
     }
 
     random_results = run_random_ablation_controls(
@@ -2091,9 +2151,7 @@ def run_controls_phase(
     suppression_comparison = core_output_suppression_comparison(adapted_core)
 
     figure_root = Path(figures_dir or ROOT / "results" / "figures")
-    suppression_figure, _ = plot_internal_vs_output_suppression(
-        suppression_comparison
-    )
+    suppression_figure, _ = plot_internal_vs_output_suppression(suppression_comparison)
     suppression_path = save_figure(
         suppression_figure,
         figure_root / "f3_internal_vs_output_suppression.png",
