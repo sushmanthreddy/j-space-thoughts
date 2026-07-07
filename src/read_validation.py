@@ -20,7 +20,7 @@ import hashlib
 import json
 import math
 from collections import defaultdict
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, MutableMapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -36,7 +36,7 @@ from src.localization_phase import (
     capture_qwen_components,
     component_grad_delta_scores,
 )
-from src.v2_read import _layer_aligned_weight_read
+from src.read_scores import qwen_mlp_gain
 
 
 SEED = 1729
@@ -47,6 +47,7 @@ COMPONENT_FRONTIER = (25, 26, 27)
 N_FOLDS = 4
 PATH_MLPS = 2
 PATH_HEADS = 6
+QWEN25_7B_HEADS_PER_LAYER = 28
 RELATIVE_POSITION_GRID_SIZE = 101
 SURGICAL_ALPHA = 1.5
 N_BOOTSTRAP = 10_000
@@ -90,7 +91,8 @@ READ_VALIDATION_PROTOCOL: dict[str, Any] = {
     "engine_donor_rule": (
         "different source concept and different clean target required; then "
         "prefer same category, exact token length, intended swap_to, sufficient "
-        "or nearest token length, and lexical order"
+        "for the frozen rank<=10 carrying positions or nearest token length, "
+        "and lexical order"
     ),
     "folds": {
         "n": N_FOLDS,
@@ -103,7 +105,10 @@ READ_VALIDATION_PROTOCOL: dict[str, Any] = {
     },
     "donors": {
         "role": "predeclared exogenous corruption bank",
-        "selection_timing": "before current outcomes and before fold assignment",
+        "selection_timing": (
+            "after freezing label-blind carrying-mask geometry, before causal "
+            "outcomes, READ scores, and fold assignment"
+        ),
         "fold_use": "donor fold is never used for estimator/path fitting",
         "audit": "same-fold, cross-fold, and unassigned donor links are reported",
     },
@@ -253,11 +258,13 @@ def write_json(path: str | Path, payload: Mapping[str, Any]) -> dict[str, Any]:
 
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
+    temporary = target.with_name(f".{target.name}.tmp")
+    temporary.write_text(
         json.dumps(_json_ready(payload), indent=2, sort_keys=True, allow_nan=False)
         + "\n",
         encoding="utf-8",
     )
+    temporary.replace(target)
     raw = target.read_bytes()
     return {
         "path": str(target),
@@ -1124,14 +1131,14 @@ def _component_rows(
     heads = [dict(row) for row in localization.get("attention_heads", [])]
     expected_mlps = {f"L{layer}.MLP" for layer in COMPONENT_FRONTIER}
     expected_heads = {
-        str(row["component"])
-        for row in heads
-        if int(row.get("layer", -1)) in COMPONENT_FRONTIER
+        f"L{layer}.H{head}"
+        for layer in COMPONENT_FRONTIER
+        for head in range(QWEN25_7B_HEADS_PER_LAYER)
     }
     if {str(row.get("component")) for row in mlps} != expected_mlps:
         raise ValueError("Localization does not cover every frontier MLP exactly once")
-    if not heads or len(expected_heads) != len(heads):
-        raise ValueError("Localization attention frontier is empty or duplicated")
+    if {str(row.get("component")) for row in heads} != expected_heads:
+        raise ValueError("Localization does not cover all 84 frontier heads exactly once")
     if any(int(row["layer"]) not in COMPONENT_FRONTIER for row in heads):
         raise ValueError("Localization contains a head outside L25-27")
     return mlps, heads
@@ -1482,33 +1489,235 @@ def fit_all_fold_component_paths(
     }
 
 
+def _mlp_weight_component(
+    bundle: Any,
+    directions: Mapping[int, torch.Tensor],
+    *,
+    layer: int,
+    seed: int,
+) -> dict[str, Any]:
+    """Compute one component using the unchanged v2/v3 MLP formula."""
+
+    input_direction = directions[layer - 1]
+    label_direction = directions[layer]
+    block = bundle.lens_model.layers[layer]
+    weight = qwen_mlp_gain(
+        block,
+        input_direction,
+        n_random=32,
+        seed=int(seed) + 10_007 * layer,
+    )
+    with torch.no_grad():
+        vector = input_direction.to(
+            next(block.parameters()).device,
+            next(block.parameters()).dtype,
+        )
+        output = block.mlp(block.post_attention_layernorm(vector)).float()
+        label = label_direction.to(output.device, torch.float32)
+        cosine = float(F.cosine_similarity(output, label, dim=0).cpu())
+    null = np.asarray(weight["random_gains"], dtype=float)
+    return {
+        **weight,
+        "input_direction_layer": layer - 1,
+        "label_direction_layer": layer,
+        "label_cosine": cosine,
+        "oriented_normalized_gain": float(weight["normalized_gain"]) * cosine,
+        "gain_random_percentile": float(np.mean(null <= float(weight["gain"]))),
+    }
+
+
+@torch.no_grad()
+def _attention_weight_component(
+    bundle: Any,
+    directions: Mapping[int, torch.Tensor],
+    *,
+    layer: int,
+    head: int,
+    seed: int,
+) -> dict[str, Any]:
+    """Exact per-head equivalent of the v2/v3 all-head null helper.
+
+    The upstream helper recomputes every head for each requested head.  This
+    implementation evaluates only the requested slice while preserving its
+    observed formula, 32 random directions, and component-specific seed.
+    """
+
+    attention = bundle.lens_model.layers[layer].self_attn
+    num_heads = int(attention.config.num_attention_heads)
+    num_kv_heads = int(attention.config.num_key_value_heads)
+    head_dim = int(attention.head_dim)
+    width = int(directions[layer - 1].numel())
+    if num_heads % num_kv_heads:
+        raise ValueError("Query-head count must be divisible by KV-head count")
+    if not 0 <= int(head) < num_heads:
+        raise IndexError(f"Attention head {head} outside L{layer}")
+    v_weight = attention.v_proj.weight.detach().float()
+    o_weight = attention.o_proj.weight.detach().float()
+    if v_weight.shape != (num_kv_heads * head_dim, width):
+        raise ValueError("Qwen value weight shape disagrees with head geometry")
+    if o_weight.shape[1] != num_heads * head_dim:
+        raise ValueError("Qwen output weight shape disagrees with head geometry")
+
+    group_size = num_heads // num_kv_heads
+    kv_head = int(head) // group_size
+    value_slice = slice(kv_head * head_dim, (kv_head + 1) * head_dim)
+    output_slice = slice(int(head) * head_dim, (int(head) + 1) * head_dim)
+    input_direction = F.normalize(directions[layer - 1].detach().float(), dim=0)
+    label = F.normalize(directions[layer].detach().float(), dim=0)
+    vector = input_direction.to(v_weight.device)
+    live_label = label.to(o_weight.device)
+    value = v_weight[value_slice] @ vector
+    observed_output = o_weight[:, output_slice] @ value.to(o_weight.device)
+    observed_norm = float(observed_output.norm().cpu())
+    observed_cosine = float(
+        F.cosine_similarity(observed_output, live_label, dim=0).cpu()
+        if observed_norm > 0.0
+        else torch.tensor(float("nan"))
+    )
+
+    component_seed = int(seed) + 1_009 + 10_007 * layer + 101 * int(head)
+    generator = torch.Generator(device="cpu").manual_seed(component_seed)
+    random_vectors = F.normalize(
+        torch.randn(32, width, generator=generator, dtype=torch.float32),
+        dim=-1,
+    )
+    random_values = random_vectors.to(v_weight.device) @ v_weight[value_slice].T
+    random_outputs = random_values.to(o_weight.device) @ o_weight[:, output_slice].T
+    random_norms_tensor = random_outputs.norm(dim=-1)
+    random_cosines_tensor = (random_outputs @ live_label) / random_norms_tensor
+    random_norms = random_norms_tensor.cpu().numpy().astype(np.float64)
+    random_cosines = random_cosines_tensor.cpu().numpy().astype(np.float64)
+    if not np.isfinite(random_norms).all():
+        raise ValueError(f"Head L{layer}.H{head} OV random null is non-finite")
+    finite_cosines = random_cosines[np.isfinite(random_cosines)]
+    median = float(np.median(random_norms))
+    normalized = observed_norm / median if median > 0.0 else None
+    label_weighted = (
+        observed_norm / median * abs(observed_cosine)
+        if median > 0.0 and math.isfinite(observed_cosine)
+        else None
+    )
+    return {
+        "head": int(head),
+        "kv_head": kv_head,
+        "ov_norm": observed_norm,
+        "label_cosine": observed_cosine,
+        "normalized_ov_norm": normalized,
+        "random_median_ov_norm": median,
+        "random_ov_norms": [float(value) for value in random_norms],
+        "ov_norm_random_percentile": float(np.mean(random_norms <= observed_norm)),
+        "random_label_cosines": [float(value) for value in random_cosines],
+        "label_cosine_random_percentile": (
+            float(np.mean(finite_cosines <= observed_cosine))
+            if finite_cosines.size
+            else None
+        ),
+        "label_weighted_normalized_ov": label_weighted,
+        "n_random": 32,
+        "seed": component_seed,
+        "input_direction_layer": layer - 1,
+        "label_direction_layer": layer,
+        "oriented_normalized_ov": float(normalized) * observed_cosine,
+    }
+
+
 def repaired_weight_read(
     bundle: Any,
     directions: Mapping[int, torch.Tensor],
     selection: Mapping[str, Any],
     *,
     seed: int,
+    component_cache: MutableMapping[tuple[str, int, str], dict[str, Any]] | None = None,
+    cache_namespace: str = "",
 ) -> dict[str, Any]:
-    """Apply the unchanged repaired v2/v3 weight formulas to a frozen set."""
+    """Apply the unchanged repaired v2/v3 formula with component caching."""
 
-    mlps = [dict(row) for row in selection.get("mlps", [])]
-    heads = [dict(row) for row in selection.get("attention_heads", [])]
-    if not mlps or not heads:
+    mlp_flags = [dict(row) for row in selection.get("mlps", [])]
+    head_flags = [dict(row) for row in selection.get("attention_heads", [])]
+    if not mlp_flags or not head_flags:
         raise ValueError("Repaired weight READ requires both frozen component families")
-    result = _layer_aligned_weight_read(
-        bundle,
-        directions,
-        {"mlps": mlps, "attention_heads": heads},
-        seed=int(seed),
+
+    def cached_core(component: str, compute: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+        key = (str(cache_namespace), int(seed), str(component))
+        if component_cache is None:
+            return compute()
+        if key not in component_cache:
+            component_cache[key] = compute()
+        return dict(component_cache[key])
+
+    mlps: list[dict[str, Any]] = []
+    for flag in mlp_flags:
+        layer = int(flag["layer"])
+        component = str(flag["component"])
+        core = cached_core(
+            component,
+            lambda _layer=layer: _mlp_weight_component(
+                bundle,
+                directions,
+                layer=_layer,
+                seed=int(seed),
+            ),
+        )
+        mlps.append({**flag, **core})
+    heads: list[dict[str, Any]] = []
+    for flag in head_flags:
+        layer = int(flag["layer"])
+        head = int(flag["head"])
+        component = str(flag["component"])
+        core = cached_core(
+            component,
+            lambda _layer=layer, _head=head: _attention_weight_component(
+                bundle,
+                directions,
+                layer=_layer,
+                head=_head,
+                seed=int(seed),
+            ),
+        )
+        heads.append({**flag, **core})
+
+    mlp_primary = float(np.mean([row["normalized_gain"] for row in mlps]))
+    attention_primary = float(
+        np.mean([row["label_weighted_normalized_ov"] for row in heads])
     )
+    result = {
+        "mlps": mlps,
+        "attention_heads": heads,
+        "mlp_primary": mlp_primary,
+        "attention_primary": attention_primary,
+        "equal_family_composite": 0.5 * mlp_primary + 0.5 * attention_primary,
+        "mlp_mean_random_percentile": float(
+            np.mean([row["gain_random_percentile"] for row in mlps])
+        ),
+        "attention_mean_random_percentile": float(
+            np.mean([row["ov_norm_random_percentile"] for row in heads])
+        ),
+        "mlp_mean_oriented": float(
+            np.mean([row["oriented_normalized_gain"] for row in mlps])
+        ),
+        "attention_mean_oriented": float(
+            np.mean([row["oriented_normalized_ov"] for row in heads])
+        ),
+        "metadata": {
+            "activation_independent_primary_magnitude": True,
+            "selection_conditioned": True,
+            "input_direction": "v[layer-1]",
+            "label_direction": "v[layer]",
+            "n_random": 32,
+            "per_head_exact_null_optimization": True,
+        },
+    }
     fit_on_train = bool(selection.get("selection_fit_on_train_fold", True))
     return {
         **result,
         "selection_name": selection.get("name"),
         "selection_fit_on_train_fold": fit_on_train,
-        "formula_source": "src.v2_read._layer_aligned_weight_read",
+        "formula_source": (
+            "exact-equivalent optimized port of "
+            "src.v2_read._layer_aligned_weight_read"
+        ),
         "metadata": {
-            **dict(result.get("metadata", {})),
+            **dict(result["metadata"]),
             "selection_conditioned": fit_on_train,
             "global_common_frontier": not fit_on_train,
         },
@@ -2062,6 +2271,10 @@ def score_under_all_fold_paths(
     concept_id: str,
     sequence_length: int | None = None,
     seed: int = SEED,
+    weight_component_cache: MutableMapping[
+        tuple[str, int, str], dict[str, Any]
+    ]
+    | None = None,
 ) -> dict[str, Any]:
     """Compute exactly seven support scores under each of four train-fold paths."""
 
@@ -2097,6 +2310,8 @@ def score_under_all_fold_paths(
         directions,
         r1_selection,
         seed=base_seed,
+        component_cache=weight_component_cache,
+        cache_namespace=str(concept_id),
     )
     output: dict[str, Any] = {}
     for fold in range(N_FOLDS):
@@ -2111,6 +2326,8 @@ def score_under_all_fold_paths(
                 directions,
                 r23_selection,
                 seed=base_seed,
+                component_cache=weight_component_cache,
+                cache_namespace=str(concept_id),
             )
             r2 = r2_weight_profile(
                 r23_selection,
