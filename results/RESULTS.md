@@ -22,3 +22,15 @@ and carrying-position edits before any hypothesis test.
 
 Stage-0 decision: **PASS**. This licenses only G-SWAP confirmation
 and the alpha sweep; it does not license Stage-2 recalibration or Stage-3 science.
+
+
+## Stage 1 — G-SWAP confirmation
+
+| item | concept swap | clean top-1 | edited top-1 | clean M | edited M | gate |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| spider-legs | ` spider` -> `ant` | `8` | `6` | 6.500 | -6.500 | PASS |
+| animal-legs-buffalo2 | ` buffalo` -> ` spider` | ` four` | ` eight` | 3.562 | -4.000 | PASS |
+| chem-photosynthesis-Z | ` oxygen` -> ` nitrogen` | `8` | `7` | 5.375 | -5.250 | PASS |
+
+**G-SWAP PASS (3/3).**
+The next permitted step is the surgical alpha sweep. Science remains prohibited.
