@@ -39,6 +39,52 @@ def test_nonorthogonal_swap_is_exact_and_preserves_orthogonal_part() -> None:
     assert torch.equal(edited[..., 2], hidden[..., 2])
 
 
+def test_swap_matches_paper_pseudoinverse_reference() -> None:
+    generator = torch.Generator().manual_seed(37)
+    hidden = torch.randn(2, 4, 9, generator=generator)
+    source = torch.randn(9, generator=generator)
+    target = torch.randn(9, generator=generator)
+    source = source / source.norm()
+    target = target / target.norm()
+    # Column-basis form used in the paper: c = V^+ h and h' = h + V(Pc-c).
+    columns = torch.stack([source, target], dim=1)
+    coefficients = torch.einsum("kd,bsd->bsk", torch.linalg.pinv(columns), hidden)
+    reference = hidden + torch.einsum(
+        "dk,bsk->bsd", columns, coefficients.flip(-1) - coefficients
+    )
+
+    actual = swap_coordinates(hidden, source, target)
+
+    assert torch.allclose(actual, reference, atol=2e-6, rtol=2e-6)
+
+
+def test_clamped_swap_strength_matches_paper_coefficients() -> None:
+    generator = torch.Generator().manual_seed(41)
+    clean = torch.randn(1, 5, 7, generator=generator)
+    current = torch.randn(1, 5, 7, generator=generator)
+    source = torch.randn(7, generator=generator)
+    target = torch.randn(7, generator=generator)
+    source = source / source.norm()
+    target = target / target.norm()
+    basis = torch.stack([source, target])
+    inverse_gram = torch.linalg.inv(basis @ basis.T)
+    clean_coeff = (clean @ basis.T) @ inverse_gram
+    current_coeff = (current @ basis.T) @ inverse_gram
+    current_orthogonal = current - current_coeff @ basis
+
+    for strength in (0.0, 0.5, 1.0, 2.0):
+        edited = clamp_swapped_coordinates(
+            current, clean, source, target, strength=strength
+        )
+        edited_coeff = (edited @ basis.T) @ inverse_gram
+        desired = clean_coeff + strength * (clean_coeff.flip(-1) - clean_coeff)
+        edited_orthogonal = edited - edited_coeff @ basis
+        assert torch.allclose(edited_coeff, desired, atol=2e-6, rtol=2e-6)
+        assert torch.allclose(
+            edited_orthogonal, current_orthogonal, atol=2e-6, rtol=2e-6
+        )
+
+
 def test_swap_rejects_singular_pair() -> None:
     hidden = torch.randn(1, 2, 3)
     direction = torch.tensor([1.0, 0.0, 0.0])

@@ -8,6 +8,7 @@ causal intervention.
 
 from __future__ import annotations
 
+import argparse
 import copy
 import json
 from pathlib import Path
@@ -137,8 +138,134 @@ print('Stage 0 complete: proceed only to Stage 1 custom repair; Stage 2/3 remain
     return target
 
 
+def build_stage1() -> Path:
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            """# 01 — Repair the coordinate swap (hard G-SWAP)
+
+This notebook repairs the known spider→ant intervention before any science is
+run. The workspace band is selected from clean J-Lens visibility only, then a
+single fixed token/basis/strength/position configuration is tested on spider
+and two predeclared upstream controls. Diagnostics retain the legacy
+configuration, alternate token surface, RMS-folded basis, adjacent layer band,
+and position-only edits."""
+        ),
+        nbformat.v4.new_code_cell(
+            """import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+os.environ['HF_HOME'] = str(Path.home() / '.cache/huggingface')
+os.environ['HF_HUB_CACHE'] = str(Path.home() / '.cache/huggingface/hub')
+os.environ['HUGGINGFACE_HUB_CACHE'] = str(Path.home() / '.cache/huggingface/hub')
+
+prior = json.loads((ROOT / 'results/metrics.json').read_text())
+assert prior['repair_v2']['stage0']['status'] == 'COMPLETE_WITH_RELEASE_OMISSION'
+assert prior['repair_v2']['gate_ledger']['g_swap'] in {'UNTESTED', 'PASS', 'FAIL'}
+
+from src.jlens_iface import load_published_lens
+from src.model_utils import load_model
+from src.v2_repair import MODEL_ID
+
+bundle = load_model(MODEL_ID)
+lens = load_published_lens(MODEL_ID)
+print({
+    'model': bundle.model_id,
+    'revision': bundle.revision,
+    'dtype': str(next(bundle.hf_model.parameters()).dtype),
+    'n_layers': bundle.lens_model.n_layers,
+    'lens_source_layers': [min(lens.source_layers), max(lens.source_layers)],
+})"""
+        ),
+        nbformat.v4.new_markdown_cell(
+            """## Pre-outcome calibration and repair sweep
+
+The paper's approximately 38–92% depth workspace prior is first mapped to the
+28-block model. Inside that prior, the longest contiguous run where the median
+minimum source-concept readout rank across three clean prompts is top-10 is
+selected. Swap outcomes do not enter band selection. The strict arm uses exact
+upstream labels, raw `J.T @ W_U`, `alpha=2`, and all prompt positions."""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v2_repair import run_stage1
+
+stage1 = run_stage1(bundle, lens)
+print('G1', stage1['g1']['status'], 'max mean KL', stage1['g1']['max_prompt_mean_kl'])
+print('workspace prior', stage1['workspace_discovery']['paper_prior_layers'])
+print('empirical band', stage1['workspace_discovery']['selected_layers'])
+print()
+print('Canonical rows:')
+for row in stage1['g_swap']['canonical_rows']:
+    print({
+        'item': row['item_name'],
+        'tokens': f"{row['source_surface']!r}->{row['target_surface']!r}",
+        'clean_top': row['clean_top_token'],
+        'edited_top': row['edited_top_token'],
+        'clean_M': row['clean_metric'],
+        'edited_M': row['edited_metric'],
+        'cf_rank': row['counterfactual_answer_rank_after_edit'],
+        'argmax_margin': row['counterfactual_argmax_margin'],
+        'repeat_error': row['repeat_max_abs_logit_difference'],
+        'pass': row['strict_pass'],
+    })
+print()
+print('G-SWAP', stage1['g_swap']['status'])"""
+        ),
+        nbformat.v4.new_markdown_cell(
+            """## Persist the gate decision
+
+A PASS licenses only the concept-direction and READ repair notebooks. It does
+not license P1–P3. A FAIL would switch the workflow directly to the Stage-4
+replication-failure path."""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v2_repair import persist_stage1
+
+metrics = persist_stage1(stage1)
+gate = metrics['repair_v2']['gate_ledger']['g_swap']
+print(json.dumps({
+    'G-SWAP': gate,
+    'passed': stage1['g_swap']['n_pass'],
+    'required': stage1['g_swap']['n_required'],
+    'alpha0_no_op_max_error': stage1['alpha0_no_op_max_abs_logit_error'],
+    'next': '02_concept_finder' if gate == 'PASS' else '08_report_stage4',
+    'science_allowed': False,
+}, indent=2))
+assert gate == stage1['g_swap']['status']
+assert metrics['repair_v2']['gate_ledger']['stage3_science'] == 'PROHIBITED'"""
+        ),
+        nbformat.v4.new_code_cell(
+            """import gc
+import torch
+
+del stage1, metrics, lens, bundle
+gc.collect()
+torch.cuda.empty_cache()
+print('Notebook 01 complete. Stage-3 science remains prohibited.')"""
+        ),
+    ]
+    target = ROOT / "notebooks" / "01_repair_swap.ipynb"
+    nbformat.write(notebook, target)
+    return target
+
+
 def main() -> None:
-    targets = [build_stage0()]
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "notebooks",
+        nargs="*",
+        choices=("00", "01"),
+        default=("00", "01"),
+        help="Notebook numbers to rebuild; specify one to preserve other outputs.",
+    )
+    arguments = parser.parse_args()
+    builders = {"00": build_stage0, "01": build_stage1}
+    targets = [builders[name]() for name in arguments.notebooks]
     print(json.dumps([str(path.relative_to(ROOT)) for path in targets], indent=2))
 
 

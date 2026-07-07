@@ -8,7 +8,8 @@ concept swap and the positive/control gates pass.
 
 ## Current status
 
-**Instrument repair in progress; there is no v2 science verdict.** The earlier
+**G-SWAP passes; calibration is still incomplete and there is no v2 science
+verdict.** The earlier
 `NOT SUPPORTED` and `REFUTED` labels at commit
 `6666385cff42fe4053412e7230ec9f55b0259f79` are retained only as legacy
 diagnostics. Both old model scales failed the strict spider→ant top-1 swap,
@@ -22,6 +23,15 @@ ablation helper. The spider→ant row in `probe-swap.json` is prompt metadata,
 not code. Therefore an unchanged upstream causal replication is **not
 runnable**, and the release does not distinguish a local implementation bug
 from a model mismatch. See [the live report](results/RESULTS.md).
+
+Notebook 01 then selected Qwen2.5-7B layers 13–24 from clean readout
+visibility, resolved exact upstream labels before leading-space alternatives,
+and used the paper-literal raw direction with its documented double-strength
+swap. One fixed all-position configuration produced the declared top-1
+counterfactual for all three predeclared upstream cases: spider→ant (`8→6`),
+buffalo→spider (`four→eight`), and oxygen→nitrogen (`8→7`). Each was repeated
+three times with identical logits. This licenses G-DIR and READ validation,
+not the science notebooks.
 
 ## Definitions and signs
 
