@@ -375,9 +375,10 @@ def strict_engine_roster(
                 )
             ]
             required_position_source = "raw intervention-position upper bound"
-        if not recipient_positions:
-            raise ValueError(f"Engine row {row['name']!r} has no recipient positions")
-        max_required_position = max(recipient_positions)
+        carrying_mask_empty = not recipient_positions
+        max_required_position = (
+            max(recipient_positions) if recipient_positions else -1
+        )
         candidates = [
             donor
             for donor in primary
@@ -415,7 +416,9 @@ def strict_engine_roster(
         donor = candidates[0] if candidates else None
         donor_length = int(donor["n_prompt_tokens"]) if donor is not None else None
         donor_covers = bool(
-            donor_length is not None and donor_length > max_required_position
+            not carrying_mask_empty
+            and donor_length is not None
+            and donor_length > max_required_position
         )
         retained.append(
             {
@@ -456,11 +459,20 @@ def strict_engine_roster(
                     and _canonical_label(donor["intermediate"])
                     == _canonical_label(foil)
                 ),
-                "donor_max_required_position": max_required_position,
+                "carrying_mask_empty": carrying_mask_empty,
+                "donor_max_required_position": (
+                    None if carrying_mask_empty else max_required_position
+                ),
                 "donor_required_position_source": required_position_source,
                 "donor_covers_recipient_positions": donor_covers,
                 "coordinate_resampling_availability": (
-                    "AVAILABLE" if donor_covers else "UNDEFINED_DONOR_TOO_SHORT_OR_MISSING"
+                    "UNDEFINED_EMPTY_CARRYING_MASK"
+                    if carrying_mask_empty
+                    else (
+                        "AVAILABLE"
+                        if donor_covers
+                        else "UNDEFINED_DONOR_TOO_SHORT_OR_MISSING"
+                    )
                 ),
                 "provenance": {
                     "source": "data/raw/02_twohop_qwen2.5-7b.json",
@@ -484,7 +496,12 @@ def strict_engine_roster(
         "n_retained": len(retained),
         "n_unavailable": 0,
         "n_coordinate_resampling_undefined_donor_geometry": sum(
-            not row["donor_covers_recipient_positions"] for row in retained
+            not row["carrying_mask_empty"]
+            and not row["donor_covers_recipient_positions"]
+            for row in retained
+        ),
+        "n_empty_carrying_masks": sum(
+            row["carrying_mask_empty"] for row in retained
         ),
         "expected_frozen_primary_count": 155,
         "all_strict_primary_rows_retained": len(retained) == len(primary),
