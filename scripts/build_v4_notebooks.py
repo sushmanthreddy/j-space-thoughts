@@ -1058,15 +1058,260 @@ print('Notebook {number} complete. No science was run.')"""
     return target
 
 
+def build_notebook14() -> Path:
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            """# 14 — Road-B methods-limitation paper
+
+G-READVAL failed after the single permitted behavior-specific READ attempt.
+This notebook assembles the evidence-supported methods paper. It does not
+change the estimator, threshold, alpha, gate decision, or claim boundary."""
+        ),
+        nbformat.v4.new_code_cell(
+            """import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+
+from src.metrics import save_json
+from src.v3_reverify import _repair_v2_sha256
+
+metrics_path = ROOT / 'results/metrics.json'
+metrics = json.loads(metrics_path.read_text())
+v3 = metrics['calibration_v3']
+v4 = metrics['calibration_v4']
+assert v4['stage10']['status'] == 'COMPLETE'
+assert v4['stage11_readval']['g_readval'] == 'FAIL'
+assert v4['gate_ledger']['stage_a_science'] == 'SKIPPED_PREREQUISITE'
+assert v4['gate_ledger']['stage_b_report'] in {'REQUIRED', 'PASS'}
+assert v4['stage12_science_twohop']['status'] == 'SKIPPED_PREREQUISITE'
+assert v4['stage13_science_ambiguity']['status'] == 'SKIPPED_PREREQUISITE'
+assert not v4['stage12_science_twohop']['model_forward_run']
+assert not v4['stage13_science_ambiguity']['model_forward_run']
+assert v4['protocol']['new_read_estimators_permitted'] == 1
+assert v4['protocol']['causal_intervention']['alpha_resweep'] is False
+assert _repair_v2_sha256(metrics['repair_v2']) == v3['provenance']['repair_v2_sha256']
+
+stage10 = v4['stage10']
+stage11 = v4['stage11_readval']
+known = stage11['known_predictivity']
+narration = stage11['narration_separation']
+legacy = metrics['repair_v2']['stage4_report']['legacy_fallback_comparison']
+attribution = metrics['repair_v2']['stage1d_read_validation']['attribution']['correlations']['predicted_vs_full_alpha1_delta']
+assert attribution['estimate'] == 0.061844689450020945
+assert legacy['n'] == 155
+
+stage14 = {
+    'schema_version': 'methods-limitation-v4',
+    'status': 'COMPLETE',
+    'classification': 'READ_OPERATIONALIZATION_METHODS_LIMITATION',
+    'failed_gate': 'G-READVAL',
+    'one_shot_compliance': {
+        'new_read_estimators': 1,
+        'alpha_resweep': False,
+        'path_thresholds_tested': [v4['protocol']['path_threshold_abs_delta_m']],
+        'extra_notebooks': [],
+    },
+    'working_instrument': {
+        'g_swap': {'status': 'PASS', 'n_pass': 3, 'n_required': 3},
+        'g_dir': {
+            'status': 'PASS',
+            'retrieval_top1': v3['stage0_reverify']['gdir']['heldout_retrieval_top1'],
+            'known_answer_top5': v3['stage0_reverify']['gdir']['known_answer_top5'],
+        },
+        'narration_causal_low': 8,
+        'narration_causal_total': 8,
+        'firing_controls': 'PASS',
+        'capability_guardrail': (
+            'Masked unrelated-text capability rows were NO_EDIT_OPPORTUNITY, '
+            'not evidence of active-edit preservation.'
+        ),
+    },
+    'read_operationalizations': {
+        'attribution_read': {
+            'status': 'FAIL',
+            'alpha1_pearson_r': attribution['estimate'],
+            'ci_low': attribution['ci_low'],
+            'ci_high': attribution['ci_high'],
+            'n': attribution['n'],
+        },
+        'global_weight_read': {
+            'status': 'FAIL',
+            'narration_low_read': 0,
+            'narration_total': 8,
+            'frozen_ratios': {
+                row['key']: row['frozen_v3_global_ratio']
+                for row in narration['rows']
+            },
+        },
+        'behavior_specific_path_read': {
+            'status': 'FAIL',
+            'known_spearman_rho': known['spearman_rho'],
+            'known_ci_low': known['ci_low'],
+            'known_ci_high': known['ci_high'],
+            'known_n': known['n'],
+            'known_clusters': known['n_source_concept_clusters'],
+            'narration_joint_pass': narration['n_joint_pass'],
+            'narration_finite_ratios': narration['n_finite_behavior_specific_ratios'],
+            'narration_total': narration['n'],
+            'path_threshold': v4['protocol']['path_threshold_abs_delta_m'],
+            'known_s_m_sizes': stage10['path_patching']['known_s_m_sizes'],
+            'narration_auto_s_m_sizes': stage10['path_patching']['narration_auto_s_m_sizes'],
+            'narration_direct_s_m_sizes': stage10['path_patching']['narration_direct_s_m_sizes'],
+        },
+    },
+    'predictions': {'P1': 'NOT_TESTED', 'P2': 'NOT_TESTED', 'P3': 'NOT_TESTED'},
+    'claim_boundary': {
+        'hypothesis_status': 'NOT_TESTED',
+        'hypothesis_true_established': False,
+        'hypothesis_false_established': False,
+        'allowed_claim': (
+            'The READ side of the auditing story was not operationalized by '
+            'attribution, global weight, or the one path-restricted estimator '
+            'on Qwen2.5-7B, so Written-vs-Read could not be tested.'
+        ),
+        'forbidden_claim': (
+            'This run must not be described as proving or refuting the '
+            'Written-vs-Read hypothesis.'
+        ),
+    },
+    'legacy_fallback_comparison': legacy,
+    'raw_artifacts': [
+        {
+            'path': stage10['raw_artifact'],
+            'bytes': stage10['raw_artifact_bytes'],
+            'sha256': stage10['raw_artifact_sha256'],
+        },
+        {
+            'path': stage11['raw_artifact'],
+            'bytes': stage11['raw_artifact_bytes'],
+            'sha256': stage11['raw_artifact_sha256'],
+        },
+    ],
+    'valid_figures': stage11['figures'],
+    'needed_to_test_hypothesis': (
+        'A READ estimator that prospectively predicts real fixed-intervention '
+        'causal effects and yields finite, behavior-specific narration scores '
+        'under an independently validated path definition.'
+    ),
+}
+v4['stage14_report'] = stage14
+v4['gate_ledger']['stage_b_report'] = 'PASS'
+v4['current_allowed_conclusion'] = 'READ_OPERATIONALIZATION_METHODS_LIMITATION_NO_HYPOTHESIS_VERDICT'
+save_json(metrics_path, metrics)
+print(json.dumps({
+    'classification': stage14['classification'],
+    'failed_gate': stage14['failed_gate'],
+    'predictions': stage14['predictions'],
+    'claim_boundary': stage14['claim_boundary'],
+}, indent=2))"""
+        ),
+        nbformat.v4.new_code_cell(
+            """known_rows = known['rows']
+narration_rows = narration['rows']
+known_table = '\\n'.join(
+    '| {name} | {causal:.3f} | {read:.3f} | {global_read:.3f} | {s_m} |'.format(
+        name=row['name'],
+        causal=row['causal_abs'],
+        read=row['behavior_specific_read'],
+        global_read=row['old_global_read'],
+        s_m=row['s_m_size'],
+    )
+    for row in known_rows
+)
+narration_table = '\\n'.join(
+    '| {key} | {language} | {frozen:.3f} | {recomputed:.3f} | {behavior} | {auto_s} | {direct_s} | {causal:.3f} |'.format(
+        key=row['key'],
+        language=row['language'],
+        frozen=row['frozen_v3_global_ratio'],
+        recomputed=row['recomputed_old_global_ratio'],
+        behavior=('NO PATH' if row['behavior_specific_ratio'] is None else f"{row['behavior_specific_ratio']:.3f}"),
+        auto_s=row['auto_s_m_size'],
+        direct_s=row['direct_s_m_size'],
+        causal=row['causal_abs'],
+    )
+    for row in narration_rows
+)
+ratios = ', '.join(
+    f"{row['key']}={row['frozen_v3_global_ratio']:.3f}" for row in narration_rows
+)
+known_sizes = [row['s_m_size'] for row in known_rows]
+auto_sizes = [row['auto_s_m_size'] for row in narration_rows]
+direct_sizes = [row['direct_s_m_size'] for row in narration_rows]
+
+report = f'''# Road B: behavior-specific READ methods limitation (v4)\n\n## Abstract\n\n+On open Qwen2.5-7B we retained a working J-Lens instrument: canonical swaps reproduce 3/3, held-out concept retrieval is 0.55 top-1 / 0.8875 known-answer top-5, and the fixed masked intervention leaves all eight narration controls causally low with firing controls active. The remaining problem is READ. Attribution READ was uncorrelated with real alpha-1 effects (`r={attribution['estimate']:.3f}`), the inherited global weight-READ marked causally inert narration concepts as strongly read (0/8 low), and the one permitted exact path-restricted estimator failed its preregistered validation (`rho={known['spearman_rho']:.3f}`, cluster-bootstrap 95% CI [{known['ci_low']:.3f}, {known['ci_high']:.3f}], N={known['n']}; narration 0/8). We therefore did not test Written-vs-Read.\n\n## Environment and integrity\n\n- GPU: {v4['preflight']['gpu']['name']}; {v4['preflight']['gpu']['memory_total_mib']} MiB total, {v4['preflight']['gpu']['memory_free_mib']} MiB free.\n- Home/HF filesystem free: {v4['preflight']['disk']['free_gib']:.1f} GiB.\n- Model: `{stage10['model']['id']}` at `{stage10['model']['revision']}` in `{stage10['model']['dtype']}`.\n- HF/J-Lens max mean KL: {stage10['model']['logit_agreement']['max_prompt_mean_kl']:.3e}, N={stage10['model']['logit_agreement']['n']}: **PASS** (<1e-3).\n- New READ estimators: **exactly 1**. Alpha resweeps: **0**. Path thresholds tested: **[0.05]**.\n- Clean-to-clean maximum exact component patch: {stage10['clean_patch_audit']['max_abs_component_patch']:.3e}.\n\n## What remained working\n\n- G-SWAP: **PASS 3/3** (`8→6`, `four→eight`, `8→7`).\n- G-DIR: **PASS** (top-1 0.55; known-answer top-5 0.8875).\n- Narration CAUSAL-low: **8/8** under the fixed masked alpha=1.5 source-to-foil swap.\n- Firing controls: **PASS**.\n- Capability guardrail: masked unrelated-text rows were `NO_EDIT_OPPORTUNITY`; they are not presented as active-edit preservation.\n\nThe alpha=1.5 masked policy was exploratory/nonselectable in v3 and is used here only because v4 explicitly fixed it as the causal endpoint. No alpha was retuned.\n\n## The single behavior-specific READ attempt\n\nFor each task, a clean-only source layer was selected by minimum source-token J-Lens rank. Path discovery used source-only unit projection deletion, distinct from the causal source-to-foil swap. Each downstream MLP output and attention head stream was patched exactly from the deleted run into an otherwise clean run. `S_M` retained every component with `|patched delta M| >= 0.05`; no top-k or fallback was allowed. The repaired v2/v3 random-normalized MLP and label-preserving OV weights were then averaged only within `S_M`, with the same 32 random directions, seeds, and `v[layer-1]→v[layer]` alignment.\n\nKnown-answer |S_M| ranged {min(known_sizes)}–{max(known_sizes)}. Narration automatic |S_M| was {min(auto_sizes)}–{max(auto_sizes)}; direct-task |S_M| was {min(direct_sizes)}–{max(direct_sizes)}.\n\n## Hard G-READVAL result\n\n### Known-answer predictivity: **FAIL**\n\nSpearman `rho={known['spearman_rho']:.3f}` with source-concept-cluster bootstrap 95% CI `[{known['ci_low']:.3f}, {known['ci_high']:.3f}]`, N={known['n']} across {known['n_source_concept_clusters']} clusters. The frozen bar was rho>=0.4 with CI lower>0. All 21 rows were estimable, so failure is not due to post-hoc row removal.\n\n| item | |CAUSAL| | behavior-specific READ | old global READ | |S_M| |\n| --- | ---: | ---: | ---: | ---: |\n{known_table}\n\n![F-READVAL-1](figures/f_readval_1_v4.png)\n\n### Narration separation: **FAIL**\n\nAll 8/8 remained causal-low, but behavior-specific auto/direct READ was finite for 0/8 and the joint gate reproduced 0/8 across zero languages. Every automatic narration `S_M` was empty at the fixed threshold; these are `NO_AUTO_PATH_DETECTED`, not low-READ successes. Direct-task path sets were nonempty. The frozen global ratios were {ratios}; all exceeded 0.50.\n\n| item | language | frozen global | recomputed global | behavior-specific | |S_auto| | |S_direct| | |CAUSAL| |\n| --- | --- | ---: | ---: | --- | ---: | ---: | ---: |\n{narration_table}\n\n![F-READVAL-2](figures/f_readval_2_v4.png)\n\nThe recomputed legacy top-k global value drifted for `fr1` and `de1` while the other six reproduced closely, further illustrating the instability of selection-conditioned global READ. The frozen v3 values remain the preregistered comparison.\n\n## Decision and claim boundary\n\n**G-READVAL FAIL. P1, P2, and P3 are NOT TESTED.** Notebooks 12–13 executed model-free prerequisite guards. This report neither supports nor refutes the Written-vs-Read hypothesis. It establishes a methods limitation: the READ side of the auditing story could not be operationalized here despite a working concept readout, canonical swap, and healthy causal/narration controls.\n\nThe new estimator is still behavior-metric selection-conditioned. The N=21 roster and all eight narration passages were previously used calibration data rather than untouched holdouts. Empty automatic path sets can arise mechanically for causally inert tasks; they were retained and disallowed from passing rather than converted to favorable zeros.\n\n## Invalidated legacy comparison\n\nFor descriptive continuity only, invalidated v1 reported J-Lens `r={legacy['jlens']['pearson_r']:.3f}` versus identity-J/logit-lens `r={legacy['identity_j_logit_lens']['pearson_r']:.3f}` at N={legacy['n']}. These values come from commit `{legacy['provenance_commit']}` and are not evidence for P1–P3.\n\n## What would be needed\n\nA future test requires a READ estimator that prospectively predicts real fixed-intervention causal effects and produces finite behavior-specific narration scores under an independently validated, preferably cross-fitted path definition. This one-shot run permits no further estimator attempt.\n\n## Reproducibility\n\n- Notebook-10 raw artifact: `{stage10['raw_artifact']}` (SHA-256 `{stage10['raw_artifact_sha256']}`).\n- Notebook-11 raw artifact: `{stage11['raw_artifact']}` (SHA-256 `{stage11['raw_artifact_sha256']}`).\n- Protocol SHA-256: `{v4['protocol_sha256']}`.\n'''
+ordered_opening = f'''## Preflight
+
+- GPU: {v4['preflight']['gpu']['name']}; {v4['preflight']['gpu']['memory_total_mib']} MiB total, {v4['preflight']['gpu']['memory_free_mib']} MiB free.
+- Home/HF filesystem free: {v4['preflight']['disk']['free_gib']:.1f} GiB.
+- Required tooling, Hugging Face authentication, repository remote, and model availability: **PASS**.
+
+## G-READVAL decision
+
+**FAIL.** Known-answer predictivity was `rho={known['spearman_rho']:.3f}` with source-concept-cluster bootstrap 95% CI `[{known['ci_low']:.3f}, {known['ci_high']:.3f}]`, N={known['n']}; narration separation was 0/8 with zero finite behavior-specific ratios.
+
+## Stage B — methods limitation
+
+The single permitted estimator did not validate, so the run stopped without testing P1–P3. The remainder is the required Road-B methods-limitation paper; it does not claim that Written-vs-Read is true or false.
+
+## Abstract'''
+report = report.replace('## Abstract', ordered_opening, 1).replace(
+    '# Road B: behavior-specific READ methods limitation (v4)',
+    '# Road B: READ-operationalization methods limitation (v4)',
+).replace('+On open Qwen2.5-7B', 'On open Qwen2.5-7B')
+report = report.replace('causally inert narration concepts', 'causally low narration concepts')
+(ROOT / 'results/RESULTS.md').write_text(report, encoding='utf-8')
+
+readme = f'''# Written vs. Read — behavior-specific READ one-shot\n\n## Result\n\n**V4 is complete with a READ-operationalization methods limitation and no hypothesis verdict.** The single permitted behavior-specific estimator failed G-READVAL: known-answer `rho={known['spearman_rho']:.3f}` (cluster-bootstrap 95% CI `[{known['ci_low']:.3f}, {known['ci_high']:.3f}]`, N={known['n']}) and narration separation `0/8`. P1–P3 were not run.\n\nThe working evidence retained from prior repairs is real but narrower: canonical swaps pass 3/3, concept retrieval passes, firing controls work, and narration causal changes remain low 8/8. Masked capability rows were `NO_EDIT_OPPORTUNITY`, not active-edit preservation.\n\nSee [the full methods report](results/RESULTS.md), [notebook 10](notebooks/10_behavior_specific_read.ipynb), [notebook 11](notebooks/11_readval_gate.ipynb), and [notebook 14](notebooks/14_report.ipynb).\n\n## One-shot method\n\nExactly one new estimator was added in `src/read_scores.py`: exact path-patch thresholding followed by the inherited random-normalized weight READ restricted to `S_M`. The threshold was fixed at `|delta M|>=0.05`; no alpha or threshold sweep and no estimator fallback was used.\n\n## Notebook chain\n\n1. `10_behavior_specific_read.ipynb` — builds exact path sets and global/restricted READ.\n2. `11_readval_gate.ipynb` — applies the hard known-answer and narration gates.\n3. `12_science_twohop.ipynb` and `13_science_ambiguity.ipynb` — executed model-free skips because G-READVAL failed.\n4. `14_report.ipynb` — Road-B methods-limitation paper.\n\n## Reproduction\n\n```bash\nexport PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"\nexport HF_HOME="$HOME/.cache/huggingface"\nexport HF_HUB_CACHE="$HOME/.cache/huggingface/hub"\nexport HUGGINGFACE_HUB_CACHE="$HOME/.cache/huggingface/hub"\ncd "$HOME/j-space-thoughts"\n.venv/bin/python -m pytest -q\n```\n\nModel weights and full raw data remain ignored. Executed notebooks, compact metrics, figures, and the report are committed.\n'''
+(ROOT / 'README.md').write_text(readme, encoding='utf-8')
+print('RESULTS.md and README.md written.')"""
+        ),
+        nbformat.v4.new_code_cell(
+            """report = (ROOT / 'results/RESULTS.md').read_text()
+required = [
+    'READ-operationalization',
+    'G-READVAL FAIL',
+    'P1, P2, and P3 are NOT TESTED',
+    'NO_AUTO_PATH_DETECTED',
+    'NO_EDIT_OPPORTUNITY',
+    'invalidated v1',
+    'N=155',
+    'no further estimator attempt',
+]
+assert all(phrase in report for phrase in required), [
+    phrase for phrase in required if phrase not in report
+]
+metrics = json.loads(metrics_path.read_text())
+stage14 = metrics['calibration_v4']['stage14_report']
+assert stage14['status'] == 'COMPLETE'
+assert stage14['predictions'] == {'P1': 'NOT_TESTED', 'P2': 'NOT_TESTED', 'P3': 'NOT_TESTED'}
+assert not stage14['claim_boundary']['hypothesis_true_established']
+assert not stage14['claim_boundary']['hypothesis_false_established']
+print(report)
+print('Notebook 14 complete. Road-B methods paper persisted.')"""
+        ),
+    ]
+    target = ROOT / "notebooks" / "14_report.ipynb"
+    nbformat.write(notebook, target)
+    return target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("notebook", choices=("10", "11", "12", "13"))
+    parser.add_argument("notebook", choices=("10", "11", "12", "13", "14"))
     arguments = parser.parse_args()
     builders = {
         "10": build_notebook10,
         "11": build_notebook11,
         "12": lambda: build_science_skip("12"),
         "13": lambda: build_science_skip("13"),
+        "14": build_notebook14,
     }
     target = builders[arguments.notebook]()
     print(json.dumps({"built": str(target.relative_to(ROOT))}, indent=2))
