@@ -327,11 +327,188 @@ print('Notebook 015 complete. No science was run.')"""
     return target
 
 
+def build_stage2_skip() -> Path:
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            """# 04 — Stage-2 recalibration prerequisite record
+
+G-ALPHA failed and no alpha* was selected. Stage 2 is therefore undefined.
+This executed notebook records the skip without loading a model, recalibrating
+at another strength, or relabeling Stage-0 sentinels as alpha*-specific gates."""
+        ),
+        nbformat.v4.new_code_cell(
+            """import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+
+metrics = json.loads((ROOT / 'results/metrics.json').read_text())
+v3 = metrics['calibration_v3']
+assert v3['gate_ledger']['g_alpha'] == 'FAIL'
+assert v3['selected_intervention'] is None
+assert v3['gate_ledger']['stage3_science'] == 'SKIPPED_PREREQUISITE'
+print('Prerequisite guard: G-ALPHA FAIL; alpha*=None')"""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v3_fallback import record_stage2_skip
+
+metrics = record_stage2_skip()
+stage2 = metrics['calibration_v3']['stage2_recalibration']
+assert stage2['status'] == 'SKIPPED_PREREQUISITE'
+assert stage2['model_forward_run'] is False
+print(json.dumps(stage2, indent=2))
+print('Notebook 04 complete. No model forward or Stage-2 gate was run.')"""
+        ),
+    ]
+    target = ROOT / "notebooks" / "04_recalibration.ipynb"
+    nbformat.write(notebook, target)
+    return target
+
+
+def build_stage3_skip(notebook_name: str) -> Path:
+    metadata = {
+        "05_science_twohop.ipynb": ("05", "P1/P2 two-hop and narration"),
+        "06_science_ambiguity.ipynb": ("06", "P3 ambiguity"),
+        "07_scale.ipynb": ("07", "P1 scale"),
+    }
+    number, scope = metadata[notebook_name]
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            f"""# {number} — {scope} prerequisite record
+
+Stage 3 is prohibited because G-ALPHA failed and Stage 2 was skipped. This
+notebook records `SKIPPED_PREREQUISITE` model-free. It does not import or
+reinterpret v1/v2 science values."""
+        ),
+        nbformat.v4.new_code_cell(
+            f"""import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+
+metrics = json.loads((ROOT / 'results/metrics.json').read_text())
+v3 = metrics['calibration_v3']
+assert v3['gate_ledger']['g_alpha'] == 'FAIL'
+assert v3['stage2_recalibration']['status'] == 'SKIPPED_PREREQUISITE'
+assert v3['selected_intervention'] is None
+
+from src.v3_fallback import record_stage3_skip
+
+metrics = record_stage3_skip('{notebook_name}')
+entry = metrics['calibration_v3']['stage3_notebooks']['{notebook_name}']
+assert entry['status'] == 'SKIPPED_PREREQUISITE'
+assert entry['model_forward_run'] is False
+assert entry['science_values_loaded'] is False
+print(json.dumps(entry, indent=2))
+print('Notebook {number} complete. No science was run.')"""
+        ),
+    ]
+    target = ROOT / "notebooks" / notebook_name
+    nbformat.write(notebook, target)
+    return target
+
+
+def build_stage4_report() -> Path:
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            """# 08 — V3 Stage-4 calibration-limitation report
+
+This notebook assembles only evidence licensed by the failed gate chain. It
+publishes a calibration/READ-positive-control limitation and explicitly leaves
+P1-P3 untested. The v1 correlation comparison is descriptive legacy evidence
+from an invalidated instrument."""
+        ),
+        nbformat.v4.new_code_cell(
+            """import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+
+metrics = json.loads((ROOT / 'results/metrics.json').read_text())
+v3 = metrics['calibration_v3']
+assert v3['gate_ledger']['g_alpha'] == 'FAIL'
+assert v3['selected_intervention'] is None
+required = {
+    '05_science_twohop.ipynb',
+    '06_science_ambiguity.ipynb',
+    '07_scale.ipynb',
+}
+assert set(v3['stage3_notebooks']) == required
+assert all(
+    row['status'] == 'SKIPPED_PREREQUISITE'
+    for row in v3['stage3_notebooks'].values()
+)
+print('Gate chain verified: Stage 4 fallback is required.')"""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v3_fallback import record_stage4_fallback
+
+metrics = record_stage4_fallback()
+v3 = metrics['calibration_v3']
+stage4 = v3['stage4_fallback']
+assert stage4['status'] == 'COMPLETE'
+assert stage4['claim_boundary']['hypothesis_status'] == 'NOT_TESTED'
+assert stage4['claim_boundary']['hypothesis_false_established'] is False
+assert v3['gate_ledger']['stage4_report'] == 'PASS'
+print(json.dumps({
+    'classification': stage4['classification'],
+    'failed_gate': stage4['failed_gate'],
+    'predictions': stage4['predictions'],
+    'claim_boundary': stage4['claim_boundary'],
+    'raw_artifact': stage4['raw_artifact'],
+}, indent=2))"""
+        ),
+        nbformat.v4.new_code_cell(
+            """report = (ROOT / 'results/RESULTS.md').read_text()
+required_phrases = [
+    'V3 COMPLETE',
+    'CALIBRATION_READ_POSITIVE_CONTROL_LIMITATION',
+    'P1, P2, and P3 are **NOT TESTED**',
+    'does **not** show that the Written-vs-Read hypothesis is false',
+    '24/24',
+    'N=155',
+]
+assert all(phrase in report for phrase in required_phrases)
+print(report)
+print('Notebook 08 complete. V3 report persisted without a hypothesis verdict.')"""
+        ),
+    ]
+    target = ROOT / "notebooks" / "08_report.ipynb"
+    nbformat.write(notebook, target)
+    return target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("notebook", choices=("00", "01", "015"))
+    parser.add_argument(
+        "notebook", choices=("00", "01", "015", "04", "05", "06", "07", "08")
+    )
     arguments = parser.parse_args()
-    builders = {"00": build_stage0, "01": build_stage1, "015": build_alpha_sweep}
+    builders = {
+        "00": build_stage0,
+        "01": build_stage1,
+        "015": build_alpha_sweep,
+        "04": build_stage2_skip,
+        "05": lambda: build_stage3_skip("05_science_twohop.ipynb"),
+        "06": lambda: build_stage3_skip("06_science_ambiguity.ipynb"),
+        "07": lambda: build_stage3_skip("07_scale.ipynb"),
+        "08": build_stage4_report,
+    }
     target = builders[arguments.notebook]()
     print(json.dumps({"built": str(target.relative_to(ROOT))}, indent=2))
 
