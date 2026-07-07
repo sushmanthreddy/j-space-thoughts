@@ -579,14 +579,123 @@ print(
     return target
 
 
+def _build_stage3_skip(
+    *,
+    number: str,
+    title: str,
+    filename: str,
+    scope: str,
+    next_notebook: str,
+) -> Path:
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            f"""# {number} — {title} — SKIPPED_PREREQUISITE
+
+This is an executable gate record, not a Stage-3 science run. Stage 2 required
+the replication-failure path, so no model is loaded and no {scope} measurement
+is attempted. The cell below fails closed unless the persisted hard-gate
+decision explicitly prohibits Stage 3."""
+        ),
+        nbformat.v4.new_code_cell(
+            f"""import json
+import os
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+
+metrics = json.loads((ROOT / 'results/metrics.json').read_text())
+repair = metrics['repair_v2']
+stage2 = repair['stage2_recalibration']
+ledger = repair['gate_ledger']
+assert stage2['stage4_required'] is True
+assert stage2['stage3_allowed'] is False
+assert ledger['stage3_science'] == 'SKIPPED_PREREQUISITE'
+
+criteria = stage2.get('criteria')
+if not isinstance(criteria, dict):
+    criteria = {{
+        'g_swap_reverified': stage2['g_swap_reverification']['status'] == 'PASS',
+        'controls_fire': stage2['controls_fire']['status'] == 'PASS',
+        'matched_random_specificity': stage2['random_pair_null']['status'] == 'PASS',
+        'absent_coordinate_specificity': stage2['absent_coordinate_null']['status'] == 'PASS',
+        'capability_preserved': stage2['capability']['status'] == 'PASS',
+        'g_pos_reproduced': stage2['g_pos']['status'] == 'PASS',
+    }}
+
+blocking_criteria = {{
+    name: value
+    for name, value in criteria.items()
+    if not (value is True or value == 'PASS')
+}}
+assert blocking_criteria, 'Stage 4 was required without a recorded failed criterion'
+
+skip = {{
+    'notebook': '{number}',
+    'status': 'SKIPPED_PREREQUISITE',
+    'science_executed': False,
+    'model_inference_run': False,
+    'scope': '{scope}',
+    'blocking_criteria': blocking_criteria,
+    'next': '{next_notebook}',
+}}
+assert skip['status'] == 'SKIPPED_PREREQUISITE'
+assert skip['science_executed'] is False
+assert skip['model_inference_run'] is False
+repair.setdefault('stage3_notebooks', {{}})['{number}'] = skip
+(ROOT / 'results/metrics.json').write_text(
+    json.dumps(metrics, indent=2, sort_keys=True) + chr(10)
+)
+print(json.dumps(skip, indent=2))"""
+        ),
+    ]
+    target = ROOT / "notebooks" / filename
+    nbformat.write(notebook, target)
+    return target
+
+
+def build_stage5_skip() -> Path:
+    return _build_stage3_skip(
+        number="05",
+        title="Science two-hop",
+        filename="05_science_twohop.ipynb",
+        scope="P1/P2 two-hop",
+        next_notebook="06_science_ambiguity",
+    )
+
+
+def build_stage6_skip() -> Path:
+    return _build_stage3_skip(
+        number="06",
+        title="Science ambiguity",
+        filename="06_science_ambiguity.ipynb",
+        scope="P3 ambiguity",
+        next_notebook="07_scale",
+    )
+
+
+def build_stage7_skip() -> Path:
+    return _build_stage3_skip(
+        number="07",
+        title="Scale comparison",
+        filename="07_scale.ipynb",
+        scope="cross-scale P1",
+        next_notebook="08_report_stage4",
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "notebooks",
         nargs="*",
-        choices=("00", "01", "02", "03", "04"),
+        choices=("00", "01", "02", "03", "04", "05", "06", "07"),
         default=("00", "01", "02", "03", "04"),
-        help="Notebook numbers to rebuild; specify one to preserve other outputs.",
+        help=(
+            "Notebook numbers to rebuild; specify one to preserve other outputs. "
+            "Fallback skip notebooks 05-07 must be requested after Stage 2 fails."
+        ),
     )
     arguments = parser.parse_args()
     builders = {
@@ -595,6 +704,9 @@ def main() -> None:
         "02": build_stage2,
         "03": build_stage3,
         "04": build_stage4,
+        "05": build_stage5_skip,
+        "06": build_stage6_skip,
+        "07": build_stage7_skip,
     }
     targets = [builders[name]() for name in arguments.notebooks]
     print(json.dumps([str(path.relative_to(ROOT)) for path in targets], indent=2))
