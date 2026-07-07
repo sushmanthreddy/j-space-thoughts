@@ -5,8 +5,8 @@
 **STAGE-2 CALIBRATION FAIL; STAGE-3 SCIENCE SKIPPED.** G-SWAP, G-DIR, repaired
 READ validation, firing controls, and the matched random/absent specificity
 checks pass. Capability preservation fails and G-POS reproduces only 1/8
-passages. The workflow therefore switches to the Stage-4 replication-failure
-deliverable. The WRITE-versus-READ hypothesis remains untested; the v1 `NOT
+passages. The Stage-4 replication-failure deliverable is complete. The
+WRITE-versus-READ hypothesis remains untested; the v1 `NOT
 SUPPORTED` / `REFUTED` labels remain withdrawn as scientific conclusions.
 
 ## Environment
@@ -182,3 +182,68 @@ at least 6/8 passages spanning at least 3/4 languages.
 ### Stage-2 decision
 
 **FAIL**. Stage 3 is blocked; the workflow switches to the Stage-4 replication-failure report. This is not a verdict on the hypothesis.
+
+## Stage 4 — replication-failure fallback
+
+### Final classification
+
+**OPEN-MODEL INSTRUMENT REPLICATION FAILURE; HYPOTHESIS NOT TESTED.** The
+custom repaired swap passed 3/3 known-answer
+cases and passed Stage-2 reverification, but the complete calibration chain did
+not pass. Stage 3 was therefore skipped exactly as preregistered.
+
+The released upstream walkthrough supplied J-Lens readout but omitted executable
+causal-swap code (`NOT_RUNNABLE_RELEASE_OMISSION`), so the upstream intervention
+could not be run unchanged. The successful 3/3 custom swap is a local repair,
+not evidence that all required controls calibrated.
+
+### Calibration blockers
+
+| gate | status | persisted evidence |
+| --- | --- | --- |
+| capability preservation | FAIL | mean delta NLL=0.623; mean absolute delta NLL=0.669; threshold=0.25 |
+| G-POS | FAIL | 1/8 passages; languages=Spanish |
+
+### Science path deliberately skipped
+
+| notebook | disposition |
+| --- | --- |
+| `05_science_twohop.ipynb` | SKIPPED_PREREQUISITE |
+| `06_science_ambiguity.ipynb` | SKIPPED_PREREQUISITE |
+| `07_scale.ipynb` | SKIPPED_PREREQUISITE |
+
+| preregistered prediction | result |
+| --- | --- |
+| P1 | **NOT_TESTED** |
+| P2 | **NOT_TESTED** |
+| P3 | **NOT_TESTED** |
+
+No Stage-3 result was computed or inferred from the failed calibration.
+
+### Requested legacy fallback comparison
+
+From commit `6666385cff42fe4053412e7230ec9f55b0259f79`, over N=155 legacy items:
+
+| predictor | Pearson r | 95% CI |
+| --- | ---: | ---: |
+| J-Lens | 0.6083677 | [0.5167659, 0.6927411] |
+| identity-J / logit lens | 0.6394085 | [0.5519587, 0.7188587] |
+
+**No observed J-Lens advantage:** its point estimate (0.6083677) was below the
+identity-J/logit-lens estimate (0.6394085), with overlapping intervals. This is
+the requested fallback observation only; it does not test P1, P2, or P3 and
+does not reinstate any withdrawn v1 science conclusion.
+
+### Prerequisite-valid figures
+
+- [F0: Stage-0 upstream audit](figures/f0_stage0_upstream_audit.png)
+- [G-SWAP: Repaired three-case swap calibration](figures/repair_gswap_calibration.png)
+- [G-DIR: Independent direction validation](figures/repair_md_alignment.png)
+- [F5: Repaired READ validation](figures/f5_repaired_read_validation.png)
+- [F3: Firing output-suppression control](figures/f3_firing_suppression_control.png)
+
+### Claim boundary
+
+**This report does not establish that the WRITE-versus-READ hypothesis is
+false.** It establishes only that the causal instrument could not be validated
+through the full required calibration chain on the open Qwen setup used here.

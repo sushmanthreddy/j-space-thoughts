@@ -9,12 +9,13 @@ concept swap and the positive/control gates pass.
 ## Current status
 
 **G-SWAP, G-DIR, and repaired READ validation pass, but Stage-2 calibration
-fails; Stage-3 science is blocked and there is no v2 hypothesis verdict.**
+fails; Stage-3 science was skipped and the Stage-4 replication-failure report
+is complete. There is no v2 hypothesis verdict.**
 The redesigned controls fire, and the matched-random and absent-coordinate
 specificity checks pass. Capability preservation fails (mean delta NLL
 `+0.623`), and the known-narration positive control reproduces only 1/8 cases
-against its frozen 6/8 threshold. The workflow therefore takes the Stage-4
-replication-failure path. The earlier
+against its frozen 6/8 threshold. Notebooks 05–07 are executed model-free skip
+records, and notebook 08 persists the final Stage-4 claim boundary. The earlier
 `NOT SUPPORTED` and `REFUTED` labels at commit
 `6666385cff42fe4053412e7230ec9f55b0259f79` are retained only as legacy
 diagnostics. Both old model scales failed the strict spider→ant top-1 swap,

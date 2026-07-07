@@ -685,12 +685,94 @@ def build_stage7_skip() -> Path:
     )
 
 
+def build_stage8_report() -> Path:
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            """# 08 — Stage-4 replication-failure report
+
+Stage 2 failed its capability and known-narration positive-control gates, so
+the three Stage-3 notebooks executed only prerequisite guards. This notebook
+is intentionally model-free. It validates those persisted skips, records the
+requested legacy predictor comparison with provenance, and closes the run
+without making a hypothesis-level inference."""
+        ),
+        nbformat.v4.new_code_cell(
+            """import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+
+metrics = json.loads((ROOT / 'results/metrics.json').read_text())
+repair = metrics['repair_v2']
+stage2 = repair['stage2_recalibration']
+ledger = repair['gate_ledger']
+assert stage2['status'] == 'FAIL'
+assert stage2['stage4_required'] is True
+assert stage2['stage3_allowed'] is False
+assert ledger['stage3_science'] == 'SKIPPED_PREREQUISITE'
+for number in ('05', '06', '07'):
+    row = repair['stage3_notebooks'][number]
+    assert row['status'] == 'SKIPPED_PREREQUISITE'
+    assert row['science_executed'] is False
+    assert row['model_inference_run'] is False
+print({
+    'stage2': stage2['status'],
+    'blocking_criteria': [
+        name for name, passed in stage2['criteria'].items() if not passed
+    ],
+    'stage3_science': ledger['stage3_science'],
+    'model_loaded': False,
+})"""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v2_final_report import persist_stage4
+
+metrics = persist_stage4()
+stage4 = metrics['repair_v2']['stage4_report']
+print(json.dumps({
+    'classification': stage4['classification'],
+    'custom_swap': stage4['custom_swap'],
+    'calibration_blockers': stage4['calibration_blockers'],
+    'predictions': stage4['predictions'],
+    'skipped_notebooks': stage4['skipped_notebooks'],
+    'legacy_fallback_comparison': stage4['legacy_fallback_comparison'],
+    'claim_boundary': stage4['claim_boundary'],
+}, indent=2))"""
+        ),
+        nbformat.v4.new_code_cell(
+            """report = (ROOT / 'results/RESULTS.md').read_text()
+ledger = metrics['repair_v2']['gate_ledger']
+assert ledger['stage4_report'] == 'COMPLETE'
+assert ledger['stage3_science'] == 'SKIPPED_PREREQUISITE'
+assert report.count('## Stage 4 — replication-failure fallback') == 1
+assert 'P1 | **NOT_TESTED**' in report
+assert 'P2 | **NOT_TESTED**' in report
+assert 'P3 | **NOT_TESTED**' in report
+assert 'does not establish that the WRITE-versus-READ hypothesis is' in report
+assert all((ROOT / 'results' / row['path']).is_file() for row in stage4['valid_figures'])
+print({
+    'stage4_report': ledger['stage4_report'],
+    'valid_figure_ids': [row['id'] for row in stage4['valid_figures']],
+    'final_conclusion': metrics['repair_v2']['current_allowed_conclusion'],
+})"""
+        ),
+    ]
+    target = ROOT / "notebooks" / "08_report.ipynb"
+    nbformat.write(notebook, target)
+    return target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "notebooks",
         nargs="*",
-        choices=("00", "01", "02", "03", "04", "05", "06", "07"),
+        choices=("00", "01", "02", "03", "04", "05", "06", "07", "08"),
         default=("00", "01", "02", "03", "04"),
         help=(
             "Notebook numbers to rebuild; specify one to preserve other outputs. "
@@ -707,6 +789,7 @@ def main() -> None:
         "05": build_stage5_skip,
         "06": build_stage6_skip,
         "07": build_stage7_skip,
+        "08": build_stage8_report,
     }
     targets = [builders[name]() for name in arguments.notebooks]
     print(json.dumps([str(path.relative_to(ROOT)) for path in targets], indent=2))

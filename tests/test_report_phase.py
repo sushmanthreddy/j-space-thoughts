@@ -462,9 +462,7 @@ def test_report_is_deterministic_includes_cis_controls_scale_and_limitations(
     assert first["summary"]["scale"]["qwen32b"]["status"] == "NOT_AVAILABLE_OPTIONAL"
 
 
-def test_notebook08_calls_renderer_merges_compact_summary_and_is_executed(
-    tmp_path,
-) -> None:
+def test_notebook08_persists_guarded_stage4_fallback_and_is_executed() -> None:
     path = Path(__file__).resolve().parents[1] / "notebooks/08_report.ipynb"
     notebook = json.loads(path.read_text())
     source = "\n".join("".join(cell.get("source", [])) for cell in notebook["cells"])
@@ -479,35 +477,26 @@ def test_notebook08_calls_renderer_merges_compact_summary_and_is_executed(
         for output in cell.get("outputs", [])
     )
     assert all(cell.get("id") for cell in notebook["cells"])
-    assert "render_report" in source
+    assert "persist_stage4" in source
     assert "results/RESULTS.md" in source
-    assert "metrics['report']" in source
-    assert "REPORT COMPLETENESS PASS" in source
-    assert "REPORT COMPLETENESS FAIL" in source
-    assert "Image(filename=" in source
-    assert 'summary["p1"]["attribution_rows"]' in source
-    assert 'summary["p1"]["weight_rows"]' in source
-    assert 'summary["p3"]["mean_margin_flip_rate"]' in source
-    assert 'summary["scale"].get("models", [])' in source
-    assert 'summary["p1"]["models"]' not in source
+    assert "stage3_notebooks" in source
+    assert "SKIPPED_PREREQUISITE" in source
+    assert "science_executed" in source
+    assert "model_inference_run" in source
+    assert "P1 | **NOT_TESTED**" in source
+    assert "hypothesis" in source.lower()
+    assert "load_model(" not in source
+    assert "AutoModel" not in source
 
-    metrics = _complete_metrics(tmp_path)
-    report = render_report(metrics, root=tmp_path)
-    results_dir = tmp_path / "results"
-    results_dir.mkdir()
-    metrics_path = results_dir / "metrics.json"
-    namespace = {
-        "ROOT": tmp_path,
-        "metrics": metrics,
-        "metrics_path": metrics_path,
-        "report": report,
-    }
-    exec("".join(notebook["cells"][2]["source"]), namespace)
-
-    persisted = json.loads(metrics_path.read_text())
-    assert (results_dir / "RESULTS.md").read_text() == report["markdown"]
-    assert persisted["report"]["completeness"] == {
-        "status": "PASS",
-        "missing_metrics": [],
-        "missing_figures": [],
+    live_metrics = json.loads(
+        (Path(__file__).resolve().parents[1] / "results/metrics.json").read_text()
+    )["repair_v2"]
+    assert live_metrics["gate_ledger"]["stage4_report"] == "COMPLETE"
+    assert live_metrics["gate_ledger"]["stage3_science"] == (
+        "SKIPPED_PREREQUISITE"
+    )
+    assert live_metrics["stage4_report"]["predictions"] == {
+        "P1": "NOT_TESTED",
+        "P2": "NOT_TESTED",
+        "P3": "NOT_TESTED",
     }
