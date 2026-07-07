@@ -141,6 +141,7 @@ not relabeled as a Stage-2 result at a nonexistent alpha*.
 | notebook | preregistered scope | result |
 | --- | --- | --- |
 | 05_science_twohop.ipynb | P1 and P2 | SKIPPED_PREREQUISITE |
+| 06_science_ambiguity.ipynb | P3 | SKIPPED_PREREQUISITE |
 
 These notebooks are executed model-free guards. They do not import historical
 science values or treat missing measurements as negative effects.
