@@ -226,6 +226,22 @@ def test_tiny_qwen_localization_weight_nulls_cleanup_and_f4(tmp_path) -> None:
         len(block.self_attn.o_proj._forward_pre_hooks) for block in blocks
     ] == original_attention_hooks
 
+    custom = localize_source_direction(
+        model,
+        blocks,
+        input_ids,
+        direction,
+        source_layer=0,
+        target_token_id=5,
+        foil_token_id=6,
+        metric_fn=lambda logits: (
+            torch.logsumexp(logits[0, -1, [5, 7]].float(), dim=0)
+            - torch.logsumexp(logits[0, -1, [6, 8]].float(), dim=0)
+        ),
+    )
+    assert custom["behavior_metric"] == "custom scalar metric_fn"
+    assert np.isfinite(custom["actual_delta"])
+
     flagged = flag_top_components(
         localization,
         top_k_mlps=3,

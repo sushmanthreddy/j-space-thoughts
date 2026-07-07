@@ -2,11 +2,12 @@
 
 ## Current verdict
 
-**G-SWAP PASS; SCIENCE NOT YET RUN.** The causal swap
-instrument now passes the three-case known-answer calibration, but the v2
-hypothesis remains undecided until G-DIR, READ validation, firing controls, and
-G-POS are completed. The v1 `NOT SUPPORTED` / `REFUTED` labels remain withdrawn
-as scientific conclusions.
+**STAGE-2 CALIBRATION FAIL; STAGE-3 SCIENCE SKIPPED.** G-SWAP, G-DIR, repaired
+READ validation, firing controls, and the matched random/absent specificity
+checks pass. Capability preservation fails and G-POS reproduces only 1/8
+passages. The workflow therefore switches to the Stage-4 replication-failure
+deliverable. The WRITE-versus-READ hypothesis remains untested; the v1 `NOT
+SUPPORTED` / `REFUTED` labels remain withdrawn as scientific conclusions.
 
 ## Environment
 
@@ -66,10 +67,13 @@ persisted rather than hidden.
 | Upstream causal swap | NOT RUNNABLE | Release omission |
 | G1 HF/J-Lens logits | PASS | max mean KL=1.660e-08, N=20 |
 | G-SWAP | PASS | Proceed to G-DIR and READ validation only |
-| G-DIR | NOT RUN IN V2 | Notebook 02 next |
-| READ validation | NOT RUN IN V2 | Notebook 03 pending |
-| G-POS / firing controls | NOT RUN IN V2 | Stage 2 pending |
-| Stage-3 science | PROHIBITED | Calibration chain incomplete |
+| G-DIR | PASS | Independent MD direction validated |
+| READ validation | PASS | Weight-based primary; attribution secondary |
+| Firing controls | PASS | Redesigned metrics move by exact nonzero amounts |
+| Random / absent specificity | PASS / PASS | Stage-2 specificity checks pass |
+| Capability | FAIL | Mean delta NLL +0.623 on unrelated text |
+| G-POS | FAIL (1/8) | Required at least 6/8 across 3 languages |
+| Stage-3 science | SKIPPED PREREQUISITE | Stage-4 report required |
 
 ## Stage 1c — independent concept finder (G-DIR)
 
@@ -138,3 +142,43 @@ separate diagnostic and is not mislabeled as behavioral attribution.
 ![Repaired attribution validation](figures/f5_repaired_read_validation.png)
 
 Stage-3 science remains prohibited until firing controls and G-POS pass.
+
+## Stage 2 — recalibration, firing controls, and G-POS
+
+- G-SWAP re-verification: **PASS**.
+- Controls that can fire: **PASS**. Direct
+  concept/language-answer suppression and both continuation arms each changed a
+  metric containing the suppressed token; they are not structural zeros.
+- Matched random-pair null: **PASS** (64 draws per case).
+- Absent-coordinate null: **PASS**; eligible=3; median |null|/|real|=0.05232558139534884.
+- Capability: **FAIL**; mean delta NLL=0.623, N=24.
+- Identity-J diagnostic: 1/3 counterfactual top-1 flips, versus 3/3 for J-Lens.
+
+![F3 firing suppression control](figures/f3_firing_suppression_control.png)
+
+### Known-narration positive control
+
+The v2 metric was frozen before intervention outcomes: a clean greedy 16-token
+rollout is teacher-forced, and normalized source-language versus English token
+family mass is scored across all 16 predictions. The aligned leading-space
+language-label coordinate is used for WRITE, swap, direct classification, and
+suppression. Attribution is secondary and is not a G-POS gate.
+
+| passage | language | min all-prompt WRITE rank | clean continuation M | internal delta | direct-task delta | primary weight READ ratio | attribution ratio (secondary) | joint |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| fr1 | French | 1 | 2.815 | -1.180 | -30.125 | 1.000 | 0.040 | FAIL |
+| fr2 | French | 1 | 2.390 | -1.037 | -28.750 | 0.517 | 0.072 | FAIL |
+| de1 | German | 3 | 4.219 | -1.028 | -31.344 | 0.879 | 0.074 | FAIL |
+| de2 | German | 2 | 4.177 | -0.525 | -35.375 | 0.813 | 0.093 | FAIL |
+| es1 | Spanish | 4 | 2.692 | 0.054 | -30.969 | 0.400 | 0.064 | PASS |
+| es2 | Spanish | 1 | -6.700 | -0.459 | -33.906 | 1.000 | 0.070 | FAIL |
+| it1 | Italian | 1 | 3.117 | -0.281 | -29.562 | 1.000 | 0.070 | FAIL |
+| it2 | Italian | 1 | 2.629 | -0.439 | -30.594 | 1.121 | 0.070 | FAIL |
+
+**G-POS FAIL: 1/8 passages,
+languages=['Spanish'].** The preregistered threshold is
+at least 6/8 passages spanning at least 3/4 languages.
+
+### Stage-2 decision
+
+**FAIL**. Stage 3 is blocked; the workflow switches to the Stage-4 replication-failure report. This is not a verdict on the hypothesis.

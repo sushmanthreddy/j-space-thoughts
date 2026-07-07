@@ -20,7 +20,7 @@ import json
 import math
 import unicodedata
 from collections import defaultdict
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -786,8 +786,14 @@ def localize_source_direction(
     behavior_position: int = -1,
     intervention_positions: Sequence[int] | None = None,
     component_layers: Sequence[int] | None = None,
+    metric_fn: Callable[[torch.Tensor], torch.Tensor] | None = None,
 ) -> dict[str, Any]:
-    """Localize one single-layer concept-direction ablation downstream."""
+    """Localize one single-layer concept-direction ablation downstream.
+
+    ``metric_fn`` permits a predeclared scalar metric over the full logits
+    tensor (for example, a teacher-forced token-set margin).  The historical
+    target-minus-foil metric remains the default.
+    """
 
     if input_ids.ndim != 2 or input_ids.shape[0] != 1:
         raise ValueError("Localization requires one unpadded item with shape [1,S]")
@@ -835,12 +841,18 @@ def localize_source_direction(
             attention_mask=attention_mask,
             use_cache=False,
         ).logits.float()
-        clean_metric_tensor = _metric_from_logits(
-            clean_logits,
-            target_token_id=target_token_id,
-            foil_token_id=foil_token_id,
-            behavior_position=behavior_position,
+        clean_metric_tensor = (
+            metric_fn(clean_logits)
+            if metric_fn is not None
+            else _metric_from_logits(
+                clean_logits,
+                target_token_id=target_token_id,
+                foil_token_id=foil_token_id,
+                behavior_position=behavior_position,
+            )
         )
+        if clean_metric_tensor.ndim != 0 or not torch.isfinite(clean_metric_tensor):
+            raise ValueError("Localization metric_fn must return one finite scalar")
         tensors = tuple(clean_live[kind][layer] for kind, layer in ordered_keys)
         gradient_tuple = torch.autograd.grad(
             clean_metric_tensor,
@@ -875,12 +887,21 @@ def localize_source_direction(
             attention_mask=attention_mask,
             use_cache=False,
         ).logits.float()
-        perturbed_metric_tensor = _metric_from_logits(
-            perturbed_logits,
-            target_token_id=target_token_id,
-            foil_token_id=foil_token_id,
-            behavior_position=behavior_position,
+        perturbed_metric_tensor = (
+            metric_fn(perturbed_logits)
+            if metric_fn is not None
+            else _metric_from_logits(
+                perturbed_logits,
+                target_token_id=target_token_id,
+                foil_token_id=foil_token_id,
+                behavior_position=behavior_position,
+            )
         )
+        if (
+            perturbed_metric_tensor.ndim != 0
+            or not torch.isfinite(perturbed_metric_tensor)
+        ):
+            raise ValueError("Localization metric_fn must return one finite scalar")
         perturbed = {
             kind: {
                 layer: tensor.detach() for layer, tensor in perturbed_live[kind].items()
@@ -914,7 +935,11 @@ def localize_source_direction(
             ),
             "direction_norm": float(unit.norm().cpu()),
         },
-        "behavior_metric": "logit(target) - logit(foil)",
+        "behavior_metric": (
+            "custom scalar metric_fn"
+            if metric_fn is not None
+            else "logit(target) - logit(foil)"
+        ),
         "clean_metric": clean_metric,
         "perturbed_metric": perturbed_metric,
         "actual_delta": actual_delta,

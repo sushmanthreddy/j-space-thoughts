@@ -8,8 +8,13 @@ concept swap and the positive/control gates pass.
 
 ## Current status
 
-**G-SWAP, G-DIR, and repaired READ validation pass; control/G-POS calibration
-is still incomplete and there is no v2 science verdict.** The earlier
+**G-SWAP, G-DIR, and repaired READ validation pass, but Stage-2 calibration
+fails; Stage-3 science is blocked and there is no v2 hypothesis verdict.**
+The redesigned controls fire, and the matched-random and absent-coordinate
+specificity checks pass. Capability preservation fails (mean delta NLL
+`+0.623`), and the known-narration positive control reproduces only 1/8 cases
+against its frozen 6/8 threshold. The workflow therefore takes the Stage-4
+replication-failure path. The earlier
 `NOT SUPPORTED` and `REFUTED` labels at commit
 `6666385cff42fe4053412e7230ec9f55b0259f79` are retained only as legacy
 diagnostics. Both old model scales failed the strict spider→ant top-1 swap,
@@ -49,6 +54,15 @@ clear-case magnitudes are above random in 2/3 cases, while repaired
 attribution/weight rank correlations are positive for MLPs (`rho=0.600`) and
 attention (`rho=0.839`). Signed label orientation is retained as a diagnostic,
 not mislabeled as the sign of an unsigned magnitude.
+
+Notebook 04 freezes a 16-token teacher-forced language-mass metric before any
+edited forward, aligns leading-space language-label coordinates across WRITE,
+swap, direct classification, and suppression, and uses symmetric token-family
+arms that each move the metric by exactly one logit unit. Those instrumentation
+controls pass, as do 64-draw Gram-matched random-pair and three-case absent
+nulls. However, the alpha-2 all-band edit damages unrelated-text NLL and G-POS
+passes only Spanish `es1`; this is a failed calibration gate, not evidence that
+the WRITE-versus-READ hypothesis is false.
 
 ## Definitions and signs
 

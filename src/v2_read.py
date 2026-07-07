@@ -325,7 +325,7 @@ def _layer_aligned_weight_read(
     seed: int,
 ) -> dict[str, Any]:
     mlps: list[dict[str, Any]] = []
-    for offset, flag in enumerate(flags["mlps"]):
+    for flag in flags["mlps"]:
         layer = int(flag["layer"])
         input_direction = directions[layer - 1]
         label_direction = directions[layer]
@@ -333,7 +333,7 @@ def _layer_aligned_weight_read(
             bundle.lens_model.layers[layer],
             input_direction,
             n_random=32,
-            seed=seed + 101 * offset,
+            seed=seed + 10_007 * layer,
         )
         block = bundle.lens_model.layers[layer]
         with torch.no_grad():
@@ -360,14 +360,15 @@ def _layer_aligned_weight_read(
             }
         )
     heads: list[dict[str, Any]] = []
-    for offset, flag in enumerate(flags["attention_heads"]):
+    for flag in flags["attention_heads"]:
         layer = int(flag["layer"])
+        head = int(flag["head"])
         all_rows = qwen_attention_weight_read_with_null(
             bundle.lens_model.layers[layer].self_attn,
             directions[layer - 1],
             label_direction=directions[layer],
             n_random=32,
-            seed=seed + 1009 + 101 * offset,
+            seed=seed + 1_009 + 10_007 * layer + 101 * head,
         )
         row = next(value for value in all_rows if int(value["head"]) == int(flag["head"]))
         heads.append(

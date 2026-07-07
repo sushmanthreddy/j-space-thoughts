@@ -419,13 +419,173 @@ print('Notebook 03 complete. Controls/G-POS are next only if READ passed.')"""
     return target
 
 
+def build_stage4() -> Path:
+    notebook = nbformat.v4.new_notebook(metadata=_metadata())
+    notebook.cells = [
+        nbformat.v4.new_markdown_cell(
+            """# 04 — Recalibration, firing controls, and G-POS
+
+The repaired swap, independent direction gate, and READ validation have all
+completed before this notebook runs. Stage 2 now re-verifies G-SWAP, executes
+the redesigned controls whose measured metrics actually contain the
+suppressed token, and tests the known-narration positive control. Every result
+is persisted before the workflow chooses either Stage-3 science or the
+Stage-4 replication-failure report."""
+        ),
+        nbformat.v4.new_code_cell(
+            """import json
+import os
+import sys
+from pathlib import Path
+
+ROOT = Path('/home/jovyan/j-space-thoughts')
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
+os.environ['HF_HOME'] = str(Path.home() / '.cache/huggingface')
+os.environ['HF_HUB_CACHE'] = str(Path.home() / '.cache/huggingface/hub')
+os.environ['HUGGINGFACE_HUB_CACHE'] = str(Path.home() / '.cache/huggingface/hub')
+
+metrics = json.loads((ROOT / 'results/metrics.json').read_text())
+repair = metrics['repair_v2']
+ledger = repair['gate_ledger']
+assert ledger['g_swap'] == 'PASS'
+assert ledger['g_dir'] in {'PASS', 'DROPPED_MD'}
+assert ledger['read_validation'] == 'PASS'
+assert ledger['stage3_science'] == 'PROHIBITED'
+workspace_layers = repair['stage1']['g_swap']['canonical_configuration']['layers']
+
+from src.jlens_iface import load_published_lens
+from src.model_utils import load_model
+from src.v2_repair import MODEL_ID
+
+bundle = load_model(MODEL_ID)
+lens = load_published_lens(MODEL_ID)
+print({
+    'model': bundle.model_id,
+    'workspace_layers': workspace_layers,
+    'g_swap': ledger['g_swap'],
+    'g_dir': ledger['g_dir'],
+    'read_validation': ledger['read_validation'],
+    'science_before_recalibration': ledger['stage3_science'],
+})"""
+        ),
+        nbformat.v4.new_markdown_cell(
+            """## Execute every Stage-2 calibration arm
+
+Failure is recorded rather than raised here. In particular, the notebook
+prints the direct and language suppression effects so a nominal control PASS
+cannot hide another structural-zero design."""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v2_recalibration import run_stage2
+
+stage2 = run_stage2(bundle, lens, workspace_layers=workspace_layers)
+criteria = stage2.get('criteria', {
+    'g_swap_reverified': stage2['g_swap_reverification']['status'] == 'PASS',
+    'controls_fire': stage2['controls_fire']['status'] == 'PASS',
+    'matched_random_specificity': stage2['random_pair_null']['status'] == 'PASS',
+    'absent_coordinate_specificity': stage2['absent_coordinate_null']['status'] == 'PASS',
+    'capability_preserved': stage2['capability']['status'] == 'PASS',
+    'g_pos_reproduced': stage2['g_pos']['status'] == 'PASS',
+})
+print(json.dumps({
+    'stage2': stage2['status'],
+    'criteria': criteria,
+    'identity_j_baseline': stage2['identity_j_baseline']['status'],
+    'stage3_allowed': stage2['stage3_allowed'],
+    'stage4_required': stage2['stage4_required'],
+}, indent=2))
+
+print('\\nDirect concept-answer controls:')
+for row in stage2['controls_fire']['direct_concept_probes']['rows']:
+    print({
+        'item': row['name'],
+        'clean_pairwise_correct': row['clean_pairwise_correct'],
+        'internal_delta': row['internal_delta'],
+        'suppression_delta': row['suppression_delta'],
+        'suppression_fired': row['suppression_fired'],
+    })
+
+print('\\nLanguage controls with firing metrics:')
+for row in stage2['controls_fire']['language_controls']['rows']:
+    print(row)
+
+print('\\nKnown-narration passage decisions:')
+for row in stage2['g_pos']['rows']:
+    print({
+        'key': row['key'],
+        'category': row['category'],
+        'minimum_write_rank': row['minimum_all_prompt_language_rank'],
+        'instruction_rank_diagnostic': row['minimum_instruction_span_language_rank_diagnostic'],
+        'automatic_internal_delta': row['automatic_internal_delta'],
+        'primary_weight_read_ratio': row['primary_weight_read_ratio_auto_over_direct'],
+        'attribution_read_ratio_secondary': row['attribution_read_ratio_auto_over_direct_secondary'],
+        'failed_checks': [
+            name for name, passed in row['checks'].items() if not passed
+        ],
+        'joint_reproduction': row['joint_reproduction'],
+    })"""
+        ),
+        nbformat.v4.new_markdown_cell(
+            """## Persist first, then branch
+
+A failed calibration arm is itself the gate result. It sends the workflow to
+notebook 08 without licensing P1–P3; it does not become an exception that
+prevents the evidence from being saved."""
+        ),
+        nbformat.v4.new_code_cell(
+            """from src.v2_recalibration import persist_stage2
+
+metrics = persist_stage2(stage2)
+ledger = metrics['repair_v2']['gate_ledger']
+expected_branch = (
+    'ALLOWED' if stage2['stage3_allowed'] else 'SKIPPED_PREREQUISITE'
+)
+assert stage2['status'] == ('PASS' if stage2['stage3_allowed'] else 'FAIL')
+assert ledger['g_swap_reverify'] == stage2['g_swap_reverification']['status']
+assert ledger['controls_fire'] == stage2['controls_fire']['status']
+assert ledger['random_pair_null'] == stage2['random_pair_null']['status']
+assert ledger['absent_coordinate_null'] == stage2['absent_coordinate_null']['status']
+assert ledger['capability'] == stage2['capability']['status']
+assert ledger['g_pos'] == stage2['g_pos']['status']
+assert ledger['stage3_science'] == expected_branch
+next_notebook = (
+    '05_science_twohop'
+    if expected_branch == 'ALLOWED'
+    else '05-07_skip_guards_then_08_report_stage4'
+)
+print(json.dumps({
+    'persisted_stage2': stage2['status'],
+    'gate_ledger': ledger,
+    'next': next_notebook,
+    'hypothesis_inference_allowed': expected_branch == 'ALLOWED',
+}, indent=2))"""
+        ),
+        nbformat.v4.new_code_cell(
+            """import gc
+import torch
+
+del stage2, metrics, lens, bundle
+gc.collect()
+torch.cuda.empty_cache()
+print(
+    'Notebook 04 complete. Continue to Stage 3 only when the persisted '
+    'ledger says ALLOWED; otherwise execute the Stage-4 report.'
+)"""
+        ),
+    ]
+    target = ROOT / "notebooks" / "04_recalibration.ipynb"
+    nbformat.write(notebook, target)
+    return target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "notebooks",
         nargs="*",
-        choices=("00", "01", "02", "03"),
-        default=("00", "01", "02", "03"),
+        choices=("00", "01", "02", "03", "04"),
+        default=("00", "01", "02", "03", "04"),
         help="Notebook numbers to rebuild; specify one to preserve other outputs.",
     )
     arguments = parser.parse_args()
@@ -434,6 +594,7 @@ def main() -> None:
         "01": build_stage1,
         "02": build_stage2,
         "03": build_stage3,
+        "04": build_stage4,
     }
     targets = [builders[name]() for name in arguments.notebooks]
     print(json.dumps([str(path.relative_to(ROOT)) for path in targets], indent=2))
