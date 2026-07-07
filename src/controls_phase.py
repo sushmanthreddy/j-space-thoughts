@@ -5,7 +5,7 @@ an orchestration entry point that executes them on an already loaded model.  The
 definitions are frozen in code before any behavioral effects are observed:
 
 * random null directions are keyed only by the project seed, item, draw, and layer;
-* the absent concept is the first preregistered token meeting a J-Lens-rank rule;
+* absent controls use the first preregistered tokens meeting a J-Lens-rank rule;
 * capability texts and narration continuation-token margins are fixed constants;
 * every effect uses ``delta = edited - clean``.
 
@@ -245,10 +245,77 @@ def assert_output_suppression_complete(
     return adapted
 
 
+def assert_structural_concept_output_zero(
+    items: Sequence[Item],
+    adapted_rows: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Assert the exact-zero final concept-logit clamp for the two-hop metric.
+
+    The behavior metric is ``target_logit - foil_logit``.  Clamping a distinct
+    concept vocabulary logit therefore leaves the metric exactly unchanged by
+    construction.  This validates instrumentation/direct-logit steering only;
+    it is not independent evidence about the internal causal intervention.
+    """
+
+    row_by_name = {str(row["name"]): row for row in adapted_rows}
+    if len(row_by_name) != len(adapted_rows):
+        raise ValueError("Structural-zero assertion requires unique core row names")
+    audit_rows: list[dict[str, Any]] = []
+    for item in items:
+        name = _item_name(item)
+        if name not in row_by_name:
+            raise ValueError(f"Missing output-suppression row for {name!r}")
+        concept_id = int(item["concept_token_id"])
+        target_id = int(item["target_token_id"])
+        foil_id = int(item["foil_token_id"])
+        disjoint = concept_id not in {target_id, foil_id}
+        if not disjoint:
+            raise ValueError(
+                "Final concept-token suppression is not structurally separate from "
+                f"the target/foil metric for {name!r}: concept={concept_id}, "
+                f"target={target_id}, foil={foil_id}"
+            )
+        delta = float(row_by_name[name]["suppression_delta"])
+        exact_zero = delta == 0.0
+        if not exact_zero:
+            raise ValueError(
+                "Final concept-token suppression must be exactly zero when token IDs "
+                f"are disjoint for {name!r}; observed delta={delta!r}"
+            )
+        audit_rows.append(
+            {
+                "name": name,
+                "concept_token_id": concept_id,
+                "target_token_id": target_id,
+                "foil_token_id": foil_id,
+                "concept_disjoint_from_target_and_foil": disjoint,
+                "output_suppression_delta": delta,
+                "exact_zero": exact_zero,
+            }
+        )
+    return {
+        "status": "PASS",
+        "classification": (
+            "structural-zero instrumentation/direct-logit-steering check; "
+            "not additional causal evidence"
+        ),
+        "operation": "clamp only the final concept-token vocabulary logit",
+        "behavior_metric": "target-token logit minus foil-token logit",
+        "structural_reason": (
+            "concept token IDs are disjoint from both metric token IDs, so the "
+            "clamped logit is not an operand of the metric"
+        ),
+        "n_rows": len(audit_rows),
+        "all_token_ids_disjoint": True,
+        "all_deltas_exact_zero": True,
+        "rows": audit_rows,
+    }
+
+
 def core_output_suppression_comparison(
     adapted_rows: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
-    """Compare real internal ablation with output-only suppression per concept."""
+    """Describe internal effects beside the structural final-logit zero check."""
 
     rows: list[dict[str, Any]] = []
     for row in adapted_rows:
@@ -407,9 +474,204 @@ def select_absent_concept(
         )
     return {
         "token_id": selected,
+        "excluded_token_ids": sorted(excluded),
         "min_rank_rule": int(min_rank),
         "selection_rule": "first preregistered nonexcluded token with min rank >= threshold",
         "candidate_audit_until_selection": audits,
+    }
+
+
+def audit_absent_pair_selection(
+    preregistered_token_ids: Sequence[int],
+    ranks_by_token: Mapping[int, Any],
+    *,
+    excluded_token_ids: Sequence[int] = (),
+    min_rank: int = DEFAULT_ABSENT_MIN_RANK,
+) -> dict[str, Any]:
+    """Audit whether the frozen rank rule supplies one or two absent labels."""
+
+    first = select_absent_concept(
+        preregistered_token_ids,
+        ranks_by_token,
+        excluded_token_ids=excluded_token_ids,
+        min_rank=min_rank,
+    )
+    first_id = int(first["token_id"])
+    try:
+        second = select_absent_concept(
+            preregistered_token_ids,
+            ranks_by_token,
+            excluded_token_ids=(*excluded_token_ids, first_id),
+            min_rank=min_rank,
+        )
+    except ValueError as error:
+        if not str(error).startswith("No preregistered absent token met"):
+            raise
+        return {
+            "status": "ineligible_fewer_than_two_candidates",
+            "token_ids": [first_id],
+            "first": first,
+            "second": None,
+            "second_selection_error": str(error),
+            "min_rank_rule": int(min_rank),
+            "selection_rule": (
+                "first two distinct preregistered nonexcluded tokens whose minimum "
+                "J-Lens rank across workspace layers and positions meets the threshold"
+            ),
+            "selection_uses_behavior_outcomes": False,
+        }
+    return _absent_pair_record(first, second, min_rank=min_rank)
+
+
+def select_absent_pair(
+    preregistered_token_ids: Sequence[int],
+    ranks_by_token: Mapping[int, Any],
+    *,
+    excluded_token_ids: Sequence[int] = (),
+    min_rank: int = DEFAULT_ABSENT_MIN_RANK,
+) -> dict[str, Any]:
+    """Select the first two distinct weak-rank labels without behavior outcomes."""
+
+    audit = audit_absent_pair_selection(
+        preregistered_token_ids,
+        ranks_by_token,
+        excluded_token_ids=excluded_token_ids,
+        min_rank=min_rank,
+    )
+    if audit["status"] != "eligible":
+        raise ValueError(str(audit["second_selection_error"]))
+    return audit
+
+
+def _absent_pair_record(
+    first: Mapping[str, Any],
+    second: Mapping[str, Any],
+    *,
+    min_rank: int,
+) -> dict[str, Any]:
+    """Build the persisted record for a successfully selected absent pair."""
+
+    first_id = int(first["token_id"])
+    second_id = int(second["token_id"])
+    if first_id == second_id:
+        raise RuntimeError("Absent-pair selection returned the same token twice")
+    return {
+        "status": "eligible",
+        "token_ids": [first_id, second_id],
+        "first": dict(first),
+        "second": dict(second),
+        "second_selection_error": None,
+        "min_rank_rule": int(min_rank),
+        "selection_rule": (
+            "first two distinct preregistered nonexcluded tokens whose minimum "
+            "J-Lens rank across workspace layers and positions meets the threshold"
+        ),
+        "selection_uses_behavior_outcomes": False,
+    }
+
+
+def bootstrap_effect_summary(
+    deltas: Sequence[float],
+    *,
+    n_bootstrap: int = 5_000,
+    seed: int = SEED,
+) -> dict[str, Any]:
+    """Item-bootstrap signed and absolute intervention-effect summaries."""
+
+    values = np.asarray(deltas, dtype=float).reshape(-1)
+    if len(values) < 3 or not np.isfinite(values).all():
+        raise ValueError("Effect summary requires at least three finite item effects")
+    return {
+        "n_items": len(values),
+        "mean_delta": bootstrap_statistic(
+            [values],
+            lambda sample: float(np.mean(sample)),
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=seed,
+        ),
+        "mean_abs_delta": bootstrap_statistic(
+            [values],
+            lambda sample: float(np.mean(np.abs(sample))),
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=seed + 1,
+        ),
+        "median_delta": float(np.median(values)),
+        "median_abs_delta": float(np.median(np.abs(values))),
+        "max_abs_delta": float(np.max(np.abs(values))),
+    }
+
+
+def summarize_random_direction_null(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    n_bootstrap: int = 5_000,
+    seed: int = SEED,
+) -> dict[str, Any]:
+    """Cluster random draws by item before bootstrapping null/observed effects."""
+
+    if len(rows) < 3:
+        raise ValueError("Random-null aggregate requires at least three items")
+    null_mean: list[float] = []
+    null_abs_mean: list[float] = []
+    observed: list[float] = []
+    observed_abs: list[float] = []
+    for row in rows:
+        draws = np.asarray([draw["delta"] for draw in row["draws"]], dtype=float)
+        if not len(draws) or not np.isfinite(draws).all():
+            raise ValueError("Every random-null item needs finite retained draws")
+        null_mean.append(float(draws.mean()))
+        null_abs_mean.append(float(np.abs(draws).mean()))
+        if row.get("observed_concept_delta") is None:
+            raise ValueError("Paired random-null summary requires every observed effect")
+        value = float(row["observed_concept_delta"])
+        if not math.isfinite(value):
+            raise ValueError("Observed concept effects must be finite")
+        observed.append(value)
+        observed_abs.append(abs(value))
+
+    return {
+        "bootstrap_unit": "item; random draws are averaged within item",
+        "n_items": len(rows),
+        "n_draws_total": sum(len(row["draws"]) for row in rows),
+        "mean_random_delta": bootstrap_statistic(
+            [null_mean],
+            lambda sample: float(np.mean(sample)),
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=seed,
+        ),
+        "mean_abs_random_delta": bootstrap_statistic(
+            [null_abs_mean],
+            lambda sample: float(np.mean(sample)),
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=seed + 1,
+        ),
+        "mean_observed_delta": bootstrap_statistic(
+            [observed],
+            lambda sample: float(np.mean(sample)),
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=seed + 2,
+        ),
+        "mean_abs_observed_delta": bootstrap_statistic(
+            [observed_abs],
+            lambda sample: float(np.mean(sample)),
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=seed + 3,
+        ),
+        "paired_mean_abs_observed_minus_random": bootstrap_statistic(
+            [observed_abs, null_abs_mean],
+            lambda observed_values, null_values: float(
+                np.mean(observed_values - null_values)
+            ),
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=seed + 4,
+        ),
     }
 
 
@@ -512,6 +774,7 @@ def run_random_ablation_controls(
     direction_banks: Mapping[str, DirectionBank],
     *,
     n_draws: int = DEFAULT_RANDOM_DRAWS,
+    n_bootstrap: int = 5_000,
     seed: int = SEED,
     observed_deltas: Mapping[str, float] | None = None,
 ) -> dict[str, Any]:
@@ -593,13 +856,19 @@ def run_random_ablation_controls(
                 "draws": draws,
             }
         )
-    return {
+    result = {
         "seed": seed,
         "n_draws_per_item": n_draws,
         "direction_rule": "independent seeded fp32 random unit vector per layer",
         "intervention": "all workspace layers; all prompt positions",
         "rows": rows,
     }
+    result["aggregate"] = summarize_random_direction_null(
+        rows,
+        n_bootstrap=n_bootstrap,
+        seed=seed + 50_000,
+    )
+    return result
 
 
 def _candidate_rank_map(
@@ -627,11 +896,15 @@ def run_absent_swap_controls(
     preregistered_token_ids: Sequence[int],
     *,
     min_rank: int = DEFAULT_ABSENT_MIN_RANK,
+    n_bootstrap: int = 5_000,
+    seed: int = SEED,
     token_surfaces: Mapping[int, str] | None = None,
 ) -> dict[str, Any]:
-    """Swap each concept with a behavior-independent, weak-rank absent label."""
+    """Run an absent-pair null plus the legacy concept-to-absent stress test."""
 
-    rows: list[dict[str, Any]] = []
+    null_rows: list[dict[str, Any]] = []
+    null_rank_infeasible_rows: list[dict[str, Any]] = []
+    stress_rows: list[dict[str, Any]] = []
     for item in items:
         name = _item_name(item)
         input_ids = bundle.lens_model.encode(item["prompt"])
@@ -644,68 +917,184 @@ def run_absent_swap_controls(
         )
         rank_map = _candidate_rank_map(lens_logits, preregistered_token_ids)
         # This selection occurs before the clean/edited behavior forward below.
-        selection = select_absent_concept(
+        exclusions = (
+            int(item["concept_token_id"]),
+            int(item["foil_concept_token_id"]),
+            int(item["target_token_id"]),
+            int(item["foil_token_id"]),
+            *prompt_token_ids,
+        )
+        pair_audit = audit_absent_pair_selection(
             preregistered_token_ids,
             rank_map,
-            excluded_token_ids=(
-                int(item["concept_token_id"]),
-                int(item["foil_concept_token_id"]),
-                int(item["target_token_id"]),
-                int(item["foil_token_id"]),
-                *prompt_token_ids,
-            ),
+            excluded_token_ids=exclusions,
             min_rank=min_rank,
         )
-        selected_id = int(selection["token_id"])
-        if selected_id not in candidate_direction_banks:
-            raise KeyError(f"No direction bank for selected absent token {selected_id}")
+        first_selection = pair_audit["first"]
+        first_id = int(first_selection["token_id"])
+        second_selection = pair_audit["second"]
+        pair_selection = pair_audit if pair_audit["status"] == "eligible" else None
+        second_id = (
+            int(second_selection["token_id"])
+            if second_selection is not None
+            else None
+        )
+        selected_ids = [first_id]
+        if second_id is not None:
+            selected_ids.append(second_id)
+        for token_id in selected_ids:
+            if token_id not in candidate_direction_banks:
+                raise KeyError(f"No direction bank for selected absent token {token_id}")
 
         clean_logits = forward_logits(bundle.hf_model, input_ids)
         clean_metric = _behavior_metric(clean_logits, item)
         layers = sorted(concept_direction_banks[name])
         clean_residuals = capture_residuals(bundle.lens_model, input_ids, layers)
-        edited_logits = forward_logits(
+        stress_logits = forward_logits(
             bundle.hf_model,
             input_ids,
             blocks=bundle.lens_model.layers,
             edits=clamped_swap_edits(
                 clean_residuals,
                 concept_direction_banks[name],
-                candidate_direction_banks[selected_id],
+                candidate_direction_banks[first_id],
             ),
         )
-        edited_metric = _behavior_metric(edited_logits, item)
-        rows.append(
+        stress_metric = _behavior_metric(stress_logits, item)
+        shared = {
+            "name": name,
+            "selection_exclusions": {
+                "concept_token_id": int(item["concept_token_id"]),
+                "foil_concept_token_id": int(item["foil_concept_token_id"]),
+                "target_token_id": int(item["target_token_id"]),
+                "foil_token_id": int(item["foil_token_id"]),
+                "prompt_token_ids": prompt_token_ids,
+            },
+            "all_candidate_ranks": {
+                str(token_id): {
+                    str(layer): ranks for layer, ranks in per_layer.items()
+                }
+                for token_id, per_layer in rank_map.items()
+            },
+        }
+        if pair_selection is not None and second_id is not None:
+            null_logits = forward_logits(
+                bundle.hf_model,
+                input_ids,
+                blocks=bundle.lens_model.layers,
+                edits=clamped_swap_edits(
+                    clean_residuals,
+                    candidate_direction_banks[first_id],
+                    candidate_direction_banks[second_id],
+                ),
+            )
+            null_metric = _behavior_metric(null_logits, item)
+            null_rows.append(
+                {
+                    **shared,
+                    "selected_absent_token_ids": {
+                        "first": first_id,
+                        "second": second_id,
+                    },
+                    "selected_absent_surfaces": {
+                        "first": (
+                            token_surfaces.get(first_id)
+                            if token_surfaces is not None
+                            else None
+                        ),
+                        "second": (
+                            token_surfaces.get(second_id)
+                            if token_surfaces is not None
+                            else None
+                        ),
+                    },
+                    "pair_selection": pair_selection,
+                    **behavior_effect_record(clean_metric, null_metric),
+                }
+            )
+        else:
+            null_rank_infeasible_rows.append(
+                {
+                    **shared,
+                    "status": "excluded_before_behavior_fewer_than_two_candidates",
+                    "selected_first_absent_token_id": first_id,
+                    "selected_first_absent_surface": (
+                        token_surfaces.get(first_id)
+                        if token_surfaces is not None
+                        else None
+                    ),
+                    "first_selection": first_selection,
+                    "pair_selection_audit": pair_audit,
+                }
+            )
+        stress_rows.append(
             {
-                "name": name,
-                "selected_absent_token_id": selected_id,
+                **shared,
+                "selected_absent_token_id": first_id,
                 "selected_absent_surface": (
-                    token_surfaces.get(selected_id)
+                    token_surfaces.get(first_id)
                     if token_surfaces is not None
                     else None
                 ),
-                "selection_exclusions": {
-                    "concept_token_id": int(item["concept_token_id"]),
-                    "foil_concept_token_id": int(item["foil_concept_token_id"]),
-                    "target_token_id": int(item["target_token_id"]),
-                    "foil_token_id": int(item["foil_token_id"]),
-                    "prompt_token_ids": prompt_token_ids,
-                },
-                "selection": selection,
-                "all_candidate_ranks": {
-                    str(token_id): {
-                        str(layer): ranks for layer, ranks in per_layer.items()
-                    }
-                    for token_id, per_layer in rank_map.items()
-                },
-                **behavior_effect_record(clean_metric, edited_metric),
+                "selection": first_selection,
+                **behavior_effect_record(clean_metric, stress_metric),
             }
         )
-    return {
-        "selection_timing": "rank-only selection precedes behavior evaluation",
+
+    common = {
+        "selection_timing": "rank-only pair selection precedes behavior evaluation",
         "min_rank_threshold": min_rank,
         "candidate_token_order": [int(value) for value in preregistered_token_ids],
-        "rows": rows,
+        "n_bootstrap": n_bootstrap,
+        "confidence": 0.95,
+    }
+    return {
+        "absent_coordinate_null": {
+            **common,
+            "control_role": "primary absent-coordinate null",
+            "intervention": (
+                "clean-clamped swap of two rank-qualified absent coordinates at "
+                "all workspace layers and prompt positions; task concept untouched"
+            ),
+            "expected_effect": "near-zero delta; no post-hoc equivalence threshold",
+            "rank_feasibility": {
+                "criterion": (
+                    "at least two preregistered nonexcluded candidates meet the "
+                    "frozen rank threshold before behavior evaluation"
+                ),
+                "n_items_total": len(items),
+                "n_items_included": len(null_rows),
+                "n_items_excluded": len(null_rank_infeasible_rows),
+                "excluded_item_names": [
+                    row["name"] for row in null_rank_infeasible_rows
+                ],
+            },
+            "aggregate": bootstrap_effect_summary(
+                [row["delta"] for row in null_rows],
+                n_bootstrap=n_bootstrap,
+                seed=seed + 60_000,
+            ),
+            "rows": null_rows,
+            "rank_infeasible_rows": null_rank_infeasible_rows,
+        },
+        "concept_to_absent_stress_test": {
+            **common,
+            "control_role": "non-null specificity stress test",
+            "intervention": (
+                "clean-clamped task-concept-to-absent coordinate swap; this removes "
+                "and replaces the active task-concept coordinate"
+            ),
+            "expected_effect": (
+                "not expected to be zero and must not be interpreted as an absent null"
+            ),
+            "n_items": len(stress_rows),
+            "aggregate": bootstrap_effect_summary(
+                [row["delta"] for row in stress_rows],
+                n_bootstrap=n_bootstrap,
+                seed=seed + 70_000,
+            ),
+            "rows": stress_rows,
+        },
     }
 
 
@@ -1445,7 +1834,7 @@ def plot_random_null_controls(
 def plot_internal_vs_output_suppression(
     comparison: Mapping[str, Any],
 ) -> tuple[plt.Figure, plt.Axes]:
-    """F3: internal ablation versus output-only suppression on the same metric."""
+    """F3: internal ablation beside the structural final-logit zero check."""
 
     set_style()
     rows = comparison["rows"]
@@ -1478,8 +1867,8 @@ def plot_internal_vs_output_suppression(
     )
     axis.set(
         xlabel=r"internal all-band ablation $\Delta M$",
-        ylabel=r"output-only suppression $\Delta M$",
-        title="F3 — internal intervention vs output suppression",
+        ylabel=r"final concept-logit clamp $\Delta M$ (structural zero)",
+        title="F3 — internal effect vs structural output-logit check",
         xlim=(lower, upper),
         ylim=(lower, upper),
     )
@@ -1586,6 +1975,7 @@ def run_controls_phase(
     *,
     n_random_draws: int = DEFAULT_RANDOM_DRAWS,
     absent_min_rank: int = DEFAULT_ABSENT_MIN_RANK,
+    control_n_bootstrap: int = 5_000,
     capability_item_limit: int | None = None,
     capability_tasks_per_intervention: int = 4,
     seed: int = SEED,
@@ -1608,6 +1998,10 @@ def run_controls_phase(
         core_rows,
         expected_item_names=names,
         require_actual_delta=True,
+    )
+    structural_suppression = assert_structural_concept_output_zero(
+        item_list,
+        adapted_core,
     )
     core_by_name = _core_rows_by_name(adapted_core)
     observed_deltas = {
@@ -1654,10 +2048,11 @@ def run_controls_phase(
         item_list,
         direction_banks,
         n_draws=n_random_draws,
+        n_bootstrap=control_n_bootstrap,
         seed=seed,
         observed_deltas=observed_deltas,
     )
-    absent_results = run_absent_swap_controls(
+    absent_controls = run_absent_swap_controls(
         bundle,
         lens,
         item_list,
@@ -1665,6 +2060,8 @@ def run_controls_phase(
         candidate_directions,
         candidate_ids,
         min_rank=absent_min_rank,
+        n_bootstrap=control_n_bootstrap,
+        seed=seed,
         token_surfaces=candidate_surfaces,
     )
     capability_results = run_capability_controls(
@@ -1726,11 +2123,16 @@ def run_controls_phase(
         "core_output_suppression_assertion": {
             "status": "PASS",
             "n_rows": len(adapted_core),
+            "classification": structural_suppression["classification"],
+            "structural_zero_assertion": structural_suppression,
             "comparison": suppression_comparison,
             "rows": adapted_core,
         },
         "random_direction_null": random_results,
-        "absent_concept_swap": absent_results,
+        "absent_coordinate_null": absent_controls["absent_coordinate_null"],
+        "concept_to_absent_stress_test": absent_controls[
+            "concept_to_absent_stress_test"
+        ],
         "capability": capability_results,
         "known_narration": narration_results,
         "logit_lens_identity_jacobian": logit_lens_results,
@@ -1745,8 +2147,17 @@ def run_controls_phase(
             "known_narration": str(narration_path),
         },
         "limitations": [
+            (
+                "Final concept-token suppression is structurally zero for this "
+                "target-minus-foil metric and checks instrumentation/direct-logit "
+                "steering; it is not additional causal evidence."
+            ),
             "Random directions are norm- and layer-count matched, not geometry matched.",
-            "Absent-token specificity is conditional on a fixed rank threshold and candidate list.",
+            "The absent-coordinate null is conditional on a fixed rank threshold and candidate list.",
+            (
+                "The retained concept-to-absent intervention removes the active concept "
+                "coordinate and is a stress test, not a null."
+            ),
             "Capability NLL uses a small authored fixed text set, not a benchmark corpus.",
             "Known narration tests a preregistered first-token margin, not free-form generation quality.",
             "Identity-J and core predictors are validated against different ablation directions.",

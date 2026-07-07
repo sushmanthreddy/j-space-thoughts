@@ -9,7 +9,10 @@ import torch
 from src.controls_phase import (
     adapt_core_control_rows,
     assert_output_suppression_complete,
+    assert_structural_concept_output_zero,
+    audit_absent_pair_selection,
     behavior_effect_record,
+    bootstrap_effect_summary,
     core_output_suppression_comparison,
     identity_jacobian_direction,
     known_narration_reproduction_summary,
@@ -19,9 +22,12 @@ from src.controls_phase import (
     plot_random_null_controls,
     seeded_random_direction_bank,
     select_absent_concept,
+    select_absent_pair,
     select_offtarget_capability_items,
+    summarize_random_direction_null,
     teacher_forced_nll,
 )
+from src.interventions import clamp_swapped_coordinates
 
 
 def test_random_null_bank_is_seeded_unit_norm_and_all_layer() -> None:
@@ -77,6 +83,105 @@ def test_absent_selection_does_not_relax_failed_preregistered_rule() -> None:
             {1: [10, 20], 2: [30, 40]},
             min_rank=100,
         )
+
+
+def test_absent_pair_selects_first_two_qualified_tokens_without_outcomes() -> None:
+    pair = select_absent_pair(
+        [11, 12, 13, 14],
+        {
+            11: {2: [5_000]},
+            12: {2: [4_000, 1_200]},
+            13: {2: [7_000]},
+            14: {2: [9_000]},
+        },
+        excluded_token_ids=[11],
+        min_rank=2_000,
+    )
+
+    assert pair["token_ids"] == [13, 14]
+    assert pair["selection_uses_behavior_outcomes"] is False
+    assert pair["first"]["token_id"] == 13
+    assert pair["second"]["token_id"] == 14
+    assert 13 in pair["second"]["excluded_token_ids"]
+
+
+def test_absent_pair_audit_retains_rank_only_single_candidate_infeasibility() -> None:
+    audit = audit_absent_pair_selection(
+        [11, 12, 13],
+        {
+            11: {2: [5_000]},
+            12: {2: [100]},
+            13: {2: [200]},
+        },
+        min_rank=2_000,
+    )
+
+    assert audit["status"] == "ineligible_fewer_than_two_candidates"
+    assert audit["token_ids"] == [11]
+    assert audit["first"]["token_id"] == 11
+    assert audit["second"] is None
+    assert audit["selection_uses_behavior_outcomes"] is False
+    with pytest.raises(ValueError, match="No preregistered absent token"):
+        select_absent_pair(
+            [11, 12, 13],
+            {11: {2: [5_000]}, 12: {2: [100]}, 13: {2: [200]}},
+            min_rank=2_000,
+        )
+
+
+def test_absent_pair_coordinate_swap_leaves_orthogonal_task_concept_untouched() -> None:
+    absent_first = torch.tensor([1.0, 0.0, 0.0, 0.0])
+    absent_second = torch.tensor([0.0, 1.0, 0.0, 0.0])
+    task_concept = torch.tensor([0.0, 0.0, 1.0, 0.0])
+    clean = torch.tensor([[[2.0, -3.0, 7.0, 5.0]]])
+
+    edited = clamp_swapped_coordinates(
+        clean,
+        clean,
+        absent_first,
+        absent_second,
+    )
+
+    assert torch.allclose(edited[..., :2], torch.tensor([[[-3.0, 2.0]]]))
+    assert torch.allclose(edited @ task_concept, clean @ task_concept)
+
+
+def test_bootstrap_control_aggregates_use_items_as_units() -> None:
+    effect = bootstrap_effect_summary(
+        [-0.2, 0.0, 0.1, 0.3],
+        n_bootstrap=200,
+        seed=9,
+    )
+    assert effect["n_items"] == 4
+    assert effect["mean_delta"]["estimate"] == pytest.approx(0.05)
+    assert effect["mean_abs_delta"]["estimate"] == pytest.approx(0.15)
+
+    rows = [
+        {
+            "name": f"item-{index}",
+            "observed_concept_delta": observed,
+            "draws": [{"delta": value} for value in draws],
+        }
+        for index, (observed, draws) in enumerate(
+            [
+                (-2.0, [-0.2, 0.0]),
+                (-1.0, [-0.1, 0.1]),
+                (-3.0, [-0.3, -0.1]),
+                (-2.5, [0.0, 0.2]),
+            ]
+        )
+    ]
+    random_summary = summarize_random_direction_null(
+        rows,
+        n_bootstrap=200,
+        seed=11,
+    )
+    assert random_summary["bootstrap_unit"].startswith("item")
+    assert random_summary["n_items"] == 4
+    assert random_summary["n_draws_total"] == 8
+    assert random_summary["paired_mean_abs_observed_minus_random"][
+        "estimate"
+    ] > 0
 
 
 def test_teacher_forced_nll_matches_manual_targets_and_masks_padding() -> None:
@@ -145,6 +250,43 @@ def test_core_suppression_adapter_requires_finite_explicit_values() -> None:
     comparison = core_output_suppression_comparison(adapted)
     assert comparison["n"] == 2
     assert comparison["rows"][0]["internal_minus_output_delta"] == -2.0
+
+
+def test_final_concept_output_suppression_is_asserted_structurally_zero() -> None:
+    rows = adapt_core_control_rows(
+        [
+            {"name": "a", "suppression_delta": 0.0, "actual_delta": -2.0},
+            {"name": "b", "suppression_delta": -0.0, "actual_delta": -1.0},
+        ]
+    )
+    items = [
+        {
+            "name": "a",
+            "concept_token_id": 10,
+            "target_token_id": 20,
+            "foil_token_id": 30,
+        },
+        {
+            "name": "b",
+            "concept_token_id": 11,
+            "target_token_id": 21,
+            "foil_token_id": 31,
+        },
+    ]
+
+    audit = assert_structural_concept_output_zero(items, rows)
+    assert audit["classification"].endswith("not additional causal evidence")
+    assert audit["all_token_ids_disjoint"] is True
+    assert audit["all_deltas_exact_zero"] is True
+    assert all(row["exact_zero"] for row in audit["rows"])
+
+    overlapping = [{**items[0], "concept_token_id": 20}, items[1]]
+    with pytest.raises(ValueError, match="not structurally separate"):
+        assert_structural_concept_output_zero(overlapping, rows)
+
+    nonzero = [dict(rows[0]), {**rows[1], "suppression_delta": 1e-12}]
+    with pytest.raises(ValueError, match="exactly zero"):
+        assert_structural_concept_output_zero(items, nonzero)
 
 
 def test_identity_jacobian_is_normalized_unembedding_row() -> None:
