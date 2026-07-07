@@ -15,8 +15,10 @@ localization/mediation diagnostics, not an additive causal decomposition.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import unicodedata
 from collections import defaultdict
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
@@ -33,15 +35,25 @@ from src.jlens_iface import (
     jlens_direction_bank,
     load_local_lens,
     load_published_lens,
+    validate_lens,
 )
-from src.metrics import save_json
+from src.metrics import (
+    partial_correlation_with_ci,
+    save_json,
+    standardized_regression_with_ci,
+)
 from src.model_utils import load_model, release_model, set_seed
 from src.read_scores import qwen_head_ov_read, qwen_mlp_gain
-from src.twohop_phase import PRIMARY_DIRECTION_METHOD
+from src.twohop_phase import (
+    DEFAULT_MD_ARTIFACT,
+    MD_DIRECTION_METHOD,
+    PRIMARY_DIRECTION_METHOD,
+    load_mean_difference_artifact,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_VERSION = "localization-phase-v1"
+SCHEMA_VERSION = "localization-phase-v2"
 SEED = 1729
 NON_ADDITIVE_WARNING = (
     "Clean-gradient dot (single-source-ablated minus clean) component scores "
@@ -49,6 +61,38 @@ NON_ADDITIVE_WARNING = (
     "and MLP paths, and earlier and later components, overlap; scores must not "
     "be summed or interpreted as an additive causal decomposition."
 )
+POPULATION_METHODS = (PRIMARY_DIRECTION_METHOD, MD_DIRECTION_METHOD)
+EXPECTED_POPULATION_COUNTS = {
+    PRIMARY_DIRECTION_METHOD: 155,
+    MD_DIRECTION_METHOD: 20,
+}
+POPULATION_COMPONENT_COUNTS = {"mlps": 2, "attention_heads": 4}
+POPULATION_N_RANDOM = 32
+POPULATION_CLEAN_METRIC_ATOL = 1e-3
+CONCEPT_WEIGHT_READ_DEFINITION = {
+    "version": "concept-weight-read-v1",
+    "component_selection": (
+        "Choose one source layer by max abs(sum_position(WRITE*attribution_READ)); "
+        "after its single-source ablation, flag the top 2 downstream MLPs and "
+        "top 4 downstream attention heads by absolute localization score."
+    ),
+    "mlp": (
+        "Arithmetic mean across the two flagged MLPs of normalized_gain = "
+        "||MLP(RMSNorm(v))|| / median over 32 seeded random unit directions."
+    ),
+    "attention": (
+        "Arithmetic mean across the four flagged heads of "
+        "label_weighted_normalized_ov = "
+        "(||W_O^h W_V^kv v|| / random median) * abs(cos(OV(v), v))."
+    ),
+    "activation_independent": True,
+    "selection_conditioned": True,
+    "selection_conditioning_warning": (
+        "Weight READ is evaluated only after components are selected by absolute "
+        "activation-localization score; it is not an unbiased scan of all weights."
+    ),
+    "random_directions": POPULATION_N_RANDOM,
+}
 
 
 def _finite_number(value: Any, *, name: str) -> float:
@@ -215,9 +259,7 @@ def select_localization_subset(
             return float(distance), str(eligible[index]["name"])
 
         strict.sort(key=sort_key)
-        picked = [index for index in strict if index not in chosen_indices][
-            :n_per_cell
-        ]
+        picked = [index for index in strict if index not in chosen_indices][:n_per_cell]
         if len(picked) < n_per_cell:
             fallback = [
                 index
@@ -309,7 +351,9 @@ def choose_source_layers(
         raise ValueError(f"Row {name!r} has no raw_arrays mapping")
     write_by_layer = raw.get("write_by_layer_position")
     read_by_layer = raw.get("attribution_read_by_layer_position")
-    if not isinstance(write_by_layer, Mapping) or not isinstance(read_by_layer, Mapping):
+    if not isinstance(write_by_layer, Mapping) or not isinstance(
+        read_by_layer, Mapping
+    ):
         raise ValueError(f"Row {name!r} lacks notebook-02 WRITE/READ arrays")
     if set(map(str, write_by_layer)) != set(map(str, read_by_layer)):
         raise ValueError(f"Row {name!r} WRITE/READ layers do not align")
@@ -351,7 +395,160 @@ def choose_source_layers(
     }
 
 
-def _validate_qwen_component_layer(block: torch.nn.Module, layer: int) -> tuple[int, int]:
+def _canonical_concept(value: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Concept labels must be nonempty strings")
+    return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+
+
+def validate_population_source_rows(
+    twohop_payload: Mapping[str, Any],
+    *,
+    expected_counts: Mapping[str, int] | None = None,
+) -> dict[str, list[Mapping[str, Any]]]:
+    """Validate and return every successful raw/MD notebook-02 row."""
+
+    if twohop_payload.get("schema_version") != "twohop-phase-v1":
+        raise ValueError("Population weight READ requires twohop-phase-v1")
+    metadata = twohop_payload.get("metadata")
+    rows = twohop_payload.get("rows")
+    sample_counts = twohop_payload.get("sample_counts")
+    analyses = twohop_payload.get("analyses")
+    if not isinstance(metadata, Mapping) or not isinstance(rows, Sequence):
+        raise ValueError("Two-hop payload must contain metadata and rows")
+    if not isinstance(sample_counts, Mapping) or not isinstance(analyses, Mapping):
+        raise ValueError("Two-hop payload lacks counts or analyses")
+    if metadata.get("primary_direction") != PRIMARY_DIRECTION_METHOD:
+        raise ValueError("Two-hop payload primary direction is not raw W_U J")
+    if metadata.get("rms_gain_folded_included") is not False:
+        raise ValueError("Population phase requires unfurled raw W_U J rows")
+
+    by_method: dict[str, list[Mapping[str, Any]]] = {
+        method: [] for method in POPULATION_METHODS
+    }
+    seen: set[tuple[str, str]] = set()
+    for row in rows:
+        if not isinstance(row, Mapping) or row.get("measurement_status") != "OK":
+            continue
+        method = str(row.get("direction_method"))
+        if method not in by_method:
+            raise ValueError(f"Unknown successful direction method {method!r}")
+        name = str(row.get("name", ""))
+        if not name or (method, name) in seen:
+            raise ValueError(f"Missing/duplicate population key {(method, name)!r}")
+        seen.add((method, name))
+        aggregate = row.get("aggregate")
+        ablation = row.get("ablation")
+        if not isinstance(aggregate, Mapping) or not isinstance(ablation, Mapping):
+            raise ValueError(f"Population row {(method, name)!r} lacks outcomes")
+        _finite_number(aggregate.get("write_abs_mean"), name=f"{name} WRITE")
+        _finite_number(aggregate.get("read_abs_mean"), name=f"{name} attribution READ")
+        _finite_number(
+            ablation.get("positive_damage"),
+            name=f"{name} all-band ablation damage",
+        )
+        _finite_number(row.get("clean_metric"), name=f"{name} clean metric")
+        choose_source_layers(row, n_source_layers=1)
+        required = (
+            "prompt",
+            "prompt_token_ids",
+            "n_prompt_tokens",
+            "intervention_positions",
+            "token_ids",
+            "token_surfaces",
+            "intermediate",
+            "workspace_layers",
+        )
+        missing = [field for field in required if field not in row]
+        if missing:
+            raise ValueError(f"Population row {(method, name)!r} missing {missing}")
+        prompt_length = len(row["prompt_token_ids"])
+        if int(row["n_prompt_tokens"]) != prompt_length:
+            raise ValueError(f"Population row {(method, name)!r} prompt length drift")
+        if [int(position) for position in row["intervention_positions"]] != list(
+            range(prompt_length)
+        ):
+            raise ValueError(
+                f"Population row {(method, name)!r} intervention-position drift"
+            )
+        row_layers = list(map(int, row["workspace_layers"]))
+        metadata_layers = list(map(int, metadata["workspace_layers"]))
+        if row_layers != metadata_layers:
+            raise ValueError(f"Population row {(method, name)!r} workspace drift")
+        raw_arrays = row["raw_arrays"]
+        write_by_layer = raw_arrays["write_by_layer_position"]
+        read_by_layer = raw_arrays["attribution_read_by_layer_position"]
+        write_by_layer_int = {
+            int(layer): values for layer, values in write_by_layer.items()
+        }
+        read_by_layer_int = {
+            int(layer): values for layer, values in read_by_layer.items()
+        }
+        if set(write_by_layer_int) != set(metadata_layers) or set(
+            read_by_layer_int
+        ) != set(metadata_layers):
+            raise ValueError(
+                f"Population row {(method, name)!r} attribution-layer coverage drift"
+            )
+        for layer in metadata_layers:
+            write = write_by_layer_int[layer]
+            read = read_by_layer_int[layer]
+            if len(write) != prompt_length or len(read) != prompt_length:
+                raise ValueError(
+                    f"Population row {(method, name)!r} layer {layer} "
+                    "attribution-position coverage drift"
+                )
+        by_method[method].append(row)
+
+    declared_counts = sample_counts.get("n_by_method")
+    analysis_methods = analyses.get("ablation", {}).get("by_method", {})
+    if not isinstance(declared_counts, Mapping) or not isinstance(
+        analysis_methods, Mapping
+    ):
+        raise ValueError("Two-hop method counts/analyses are malformed")
+    for method in POPULATION_METHODS:
+        by_method[method].sort(key=lambda row: str(row["name"]))
+        actual = len(by_method[method])
+        declared = int(declared_counts.get(method, {}).get("successful", -1))
+        analyzed = int(analysis_methods.get(method, {}).get("n", -1))
+        if actual != declared or actual != analyzed:
+            raise ValueError(
+                f"Population count drift for {method}: rows={actual}, "
+                f"declared={declared}, analyzed={analyzed}"
+            )
+        if expected_counts is not None and actual != int(expected_counts[method]):
+            raise ValueError(
+                f"Expected {expected_counts[method]} {method} rows, got {actual}"
+            )
+    return by_method
+
+
+def _row_prompt_tensors(
+    bundle: Any,
+    row: Mapping[str, Any],
+    *,
+    max_length: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    prompt = str(row["prompt"])
+    untruncated = len(bundle.tokenizer.encode(prompt, add_special_tokens=True))
+    if untruncated > max_length:
+        raise ValueError(f"Refusing truncated localization for {row['name']!r}")
+    encoded = bundle.tokenizer(prompt, return_tensors="pt", truncation=False)
+    device = next(bundle.hf_model.parameters()).device
+    input_ids = encoded.input_ids.to(device)
+    attention_mask = encoded.attention_mask.to(device)
+    actual_ids = [int(value) for value in input_ids[0].detach().cpu()]
+    expected_ids = [int(value) for value in row["prompt_token_ids"]]
+    if actual_ids != expected_ids:
+        raise ValueError(
+            f"Tokenization drift relative to notebook 02 for {row['name']!r}"
+        )
+    return input_ids, attention_mask
+
+
+def _validate_qwen_component_layer(
+    block: torch.nn.Module, layer: int
+) -> tuple[int, int]:
     if not hasattr(block, "mlp") or not hasattr(block, "self_attn"):
         raise TypeError(f"Layer {layer} is not a Qwen-like decoder block")
     attention = block.self_attn
@@ -423,19 +620,21 @@ def capture_qwen_components(
                     raise TypeError(f"MLP layer {_layer} returned a non-tensor output")
                 return prepare(output, kind="mlp", layer=_layer)
 
-            def attention_pre_hook(module, inputs, *, _layer=layer, _heads=num_heads, _dim=head_dim):
+            def attention_pre_hook(
+                module, inputs, *, _layer=layer, _heads=num_heads, _dim=head_dim
+            ):
                 del module
                 if not inputs or not torch.is_tensor(inputs[0]):
-                    raise TypeError(f"Attention o_proj layer {_layer} has no tensor input")
+                    raise TypeError(
+                        f"Attention o_proj layer {_layer} has no tensor input"
+                    )
                 tensor = inputs[0]
                 if tensor.ndim != 3 or tensor.shape[-1] != _heads * _dim:
                     raise ValueError(
                         f"Attention layer {_layer} pre-o_proj expected [B,S,{_heads * _dim}], "
                         f"got {tuple(tensor.shape)}"
                     )
-                prepared = prepare(
-                    tensor, kind="attention_pre_o_proj", layer=_layer
-                )
+                prepared = prepare(tensor, kind="attention_pre_o_proj", layer=_layer)
                 return (prepared, *inputs[1:])
 
             handles.append(block.mlp.register_forward_hook(mlp_hook))
@@ -623,12 +822,13 @@ def localize_source_direction(
     }
 
     ordered_keys = [
-        *(('attention_pre_o_proj', layer) for layer in downstream),
-        *(('mlp', layer) for layer in downstream),
+        *(("attention_pre_o_proj", layer) for layer in downstream),
+        *(("mlp", layer) for layer in downstream),
     ]
-    with torch.enable_grad(), capture_qwen_components(
-        blocks, downstream, start_graph=True
-    ) as clean_live:
+    with (
+        torch.enable_grad(),
+        capture_qwen_components(blocks, downstream, start_graph=True) as clean_live,
+    ):
         clean_logits = hf_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -649,27 +849,26 @@ def localize_source_direction(
             allow_unused=False,
         )
         clean = {
-            kind: {
-                layer: tensor.detach()
-                for layer, tensor in clean_live[kind].items()
-            }
+            kind: {layer: tensor.detach() for layer, tensor in clean_live[kind].items()}
             for kind in clean_live
         }
         gradients: dict[str, dict[int, torch.Tensor]] = {
             "mlp": {},
             "attention_pre_o_proj": {},
         }
-        for (kind, layer), gradient in zip(
-            ordered_keys, gradient_tuple, strict=True
-        ):
+        for (kind, layer), gradient in zip(ordered_keys, gradient_tuple, strict=True):
             gradients[kind][layer] = gradient.detach()
 
     edit = lambda hidden: ablate_direction(  # noqa: E731 - hook closure is local
         hidden, unit, positions=intervention_positions
     )
-    with torch.no_grad(), residual_edit_hooks(
-        blocks, {source_layer: edit}
-    ), capture_qwen_components(blocks, downstream, start_graph=False) as perturbed_live:
+    with (
+        torch.no_grad(),
+        residual_edit_hooks(blocks, {source_layer: edit}),
+        capture_qwen_components(
+            blocks, downstream, start_graph=False
+        ) as perturbed_live,
+    ):
         perturbed_logits = hf_model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -683,8 +882,7 @@ def localize_source_direction(
         )
         perturbed = {
             kind: {
-                layer: tensor.detach()
-                for layer, tensor in perturbed_live[kind].items()
+                layer: tensor.detach() for layer, tensor in perturbed_live[kind].items()
             }
             for kind in perturbed_live
         }
@@ -816,9 +1014,7 @@ def qwen_attention_weight_read_with_null(
         )
     random_value = random_vectors.to(v_weight.device) @ v_weight.T
     random_value = random_value.reshape(n_random, num_kv_heads, head_dim)
-    random_value = random_value.repeat_interleave(
-        num_heads // num_kv_heads, dim=1
-    )
+    random_value = random_value.repeat_interleave(num_heads // num_kv_heads, dim=1)
     output_by_head = o_weight.reshape(o_weight.shape[0], num_heads, head_dim)
     output_by_head = output_by_head.permute(1, 0, 2)
     random_outputs = torch.einsum(
@@ -859,9 +1055,7 @@ def qwen_attention_weight_read_with_null(
                 ),
                 "random_median_ov_norm": median,
                 "random_ov_norms": [float(value) for value in ov_null],
-                "ov_norm_random_percentile": float(
-                    np.mean(ov_null <= observed_norm)
-                ),
+                "ov_norm_random_percentile": float(np.mean(ov_null <= observed_norm)),
                 "random_label_cosines": [float(value) for value in cosine_null],
                 "label_cosine_random_percentile": (
                     float(np.mean(finite_cosine <= observed_cosine))
@@ -969,9 +1163,9 @@ def weight_read_for_flagged_components(
         "attention_heads": head_rows,
         "metadata": {
             "activation_independent": True,
-            "direction": "same raw W_UJ source-layer unit direction",
+            "direction": "same supplied source-layer unit direction",
             "label_direction": (
-                "same raw W_UJ source-layer direction"
+                "same supplied source-layer direction"
                 if label_direction is None
                 else "explicit supplied label direction"
             ),
@@ -987,6 +1181,378 @@ def weight_read_for_flagged_components(
             ),
         },
     }
+
+
+def summarize_concept_weight_read(
+    weight_read: Mapping[str, Any],
+    *,
+    expected_mlps: int = POPULATION_COMPONENT_COUNTS["mlps"],
+    expected_heads: int = POPULATION_COMPONENT_COUNTS["attention_heads"],
+) -> dict[str, Any]:
+    """Reduce fixed-count flagged weights to two concept-level READ values."""
+
+    mlps = list(weight_read.get("mlps", []))
+    heads = list(weight_read.get("attention_heads", []))
+    if len(mlps) != expected_mlps or len(heads) != expected_heads:
+        raise ValueError(
+            "Concept weight READ requires exactly "
+            f"{expected_mlps} MLPs and {expected_heads} heads; "
+            f"got {len(mlps)} and {len(heads)}"
+        )
+    metadata = weight_read.get("metadata")
+    if (
+        not isinstance(metadata, Mapping)
+        or metadata.get("activation_independent") is not True
+    ):
+        raise ValueError("Weight READ metadata must declare activation independence")
+    if int(metadata.get("n_random", -1)) != POPULATION_N_RANDOM:
+        raise ValueError(
+            f"Population weight READ requires {POPULATION_N_RANDOM} random directions"
+        )
+    mlp_values = [
+        _finite_number(row.get("normalized_gain"), name="MLP normalized gain")
+        for row in mlps
+    ]
+    attention_values = [
+        _finite_number(
+            row.get("label_weighted_normalized_ov"),
+            name="attention label-weighted normalized OV",
+        )
+        for row in heads
+    ]
+    return {
+        "definition": CONCEPT_WEIGHT_READ_DEFINITION,
+        "selection_conditioned": True,
+        "mlp": {
+            "estimate": float(np.mean(mlp_values)),
+            "formula": "mean(normalized_gain) over the 2 flagged MLPs",
+            "n_components": len(mlp_values),
+            "component_ids": [str(row["component"]) for row in mlps],
+            "component_values": mlp_values,
+        },
+        "attention": {
+            "estimate": float(np.mean(attention_values)),
+            "formula": ("mean(label_weighted_normalized_ov) over the 4 flagged heads"),
+            "n_components": len(attention_values),
+            "component_ids": [str(row["component"]) for row in heads],
+            "component_values": attention_values,
+        },
+    }
+
+
+def _safe_partial_correlation(
+    outcome: Sequence[float],
+    predictor: Sequence[float],
+    control: Sequence[float],
+    *,
+    n_bootstrap: int,
+    seed: int,
+) -> dict[str, Any]:
+    try:
+        result = partial_correlation_with_ci(
+            outcome,
+            predictor,
+            control,
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=seed,
+        )
+    except (ValueError, np.linalg.LinAlgError) as error:
+        return {
+            "status": "NOT_ESTIMABLE",
+            "error_type": type(error).__name__,
+            "error": str(error),
+        }
+    if any(
+        not math.isfinite(float(result[field]))
+        for field in ("estimate", "ci_low", "ci_high")
+    ):
+        return {
+            "status": "NOT_ESTIMABLE",
+            "error_type": "NonFiniteStatistic",
+            "error": "Partial correlation or interval is non-finite",
+        }
+    return {"status": "ESTIMATED", **result}
+
+
+def _safe_weight_regression(
+    causal: Sequence[float],
+    write: Sequence[float],
+    weight_read: Sequence[float],
+    *,
+    n_bootstrap: int,
+    seed: int,
+) -> dict[str, Any]:
+    try:
+        result = standardized_regression_with_ci(
+            causal,
+            write,
+            weight_read,
+            interaction=False,
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=seed,
+        )
+    except (ValueError, np.linalg.LinAlgError) as error:
+        return {
+            "status": "NOT_ESTIMABLE",
+            "error_type": type(error).__name__,
+            "error": str(error),
+        }
+    return {
+        "status": "ESTIMATED",
+        **result,
+        "variable_mapping": {
+            "causal": "all-band ablation positive damage",
+            "write": "notebook-02 aggregate.write_abs_mean",
+            "read": "selection-conditioned concept-level weight_READ",
+        },
+    }
+
+
+def analyze_population_weight_read(
+    records: Sequence[Mapping[str, Any]],
+    *,
+    n_bootstrap: int = 5000,
+    seed: int = SEED,
+) -> dict[str, Any]:
+    """Run P1-style conditional analyses for both weight READ families."""
+
+    by_method: dict[str, Any] = {}
+    for method_index, method in enumerate(POPULATION_METHODS):
+        selected = [
+            record for record in records if record.get("direction_method") == method
+        ]
+        selected.sort(key=lambda record: str(record["name"]))
+        names = [str(record["name"]) for record in selected]
+        if len(names) != len(set(names)):
+            raise ValueError(f"Duplicate population records for {method}")
+        causal = [
+            _finite_number(
+                record["notebook02_summary"]["all_band_ablation_positive_damage"],
+                name=f"{method} causal",
+            )
+            for record in selected
+        ]
+        write = [
+            _finite_number(
+                record["notebook02_summary"]["write_strength"],
+                name=f"{method} WRITE",
+            )
+            for record in selected
+        ]
+        attribution_read = [
+            _finite_number(
+                record["notebook02_summary"]["attribution_read_strength"],
+                name=f"{method} attribution READ",
+            )
+            for record in selected
+        ]
+        families: dict[str, Any] = {}
+        for family_index, family in enumerate(("mlp", "attention")):
+            weight = [
+                _finite_number(
+                    record["concept_weight_read"][family]["estimate"],
+                    name=f"{method} {family} weight READ",
+                )
+                for record in selected
+            ]
+            statistic_seed = seed + 10_000 * method_index + 100 * family_index
+            families[family] = {
+                "n": len(selected),
+                "weight_read_definition": CONCEPT_WEIGHT_READ_DEFINITION[family],
+                "partial_correlations": {
+                    "causal_weight_read_given_write": _safe_partial_correlation(
+                        causal,
+                        weight,
+                        write,
+                        n_bootstrap=n_bootstrap,
+                        seed=statistic_seed + 1,
+                    ),
+                    "causal_write_given_weight_read": _safe_partial_correlation(
+                        causal,
+                        write,
+                        weight,
+                        n_bootstrap=n_bootstrap,
+                        seed=statistic_seed + 2,
+                    ),
+                },
+                "standardized_regression": _safe_weight_regression(
+                    causal,
+                    write,
+                    weight,
+                    n_bootstrap=n_bootstrap,
+                    seed=statistic_seed + 3,
+                ),
+                "raw_vectors": {
+                    "item_names": names,
+                    "causal_positive_damage": causal,
+                    "write_strength": write,
+                    "attribution_read_strength": attribution_read,
+                    "weight_read": weight,
+                },
+            }
+        by_method[method] = {
+            "n": len(selected),
+            "item_names": names,
+            "weight_families": families,
+        }
+    return {
+        "status": "COMPUTED",
+        "analysis_role": "required_weight_read_robustness",
+        "n_bootstrap": n_bootstrap,
+        "confidence": 0.95,
+        "seed": seed,
+        "by_method": by_method,
+        "definition": CONCEPT_WEIGHT_READ_DEFINITION,
+        "interpretation_guardrail": (
+            "Weight estimates are activation-independent after direction choice, "
+            "but selection-conditioned because components were flagged using the "
+            "same item's localization scores."
+        ),
+    }
+
+
+def _f6_bar_values(
+    twohop_payload: Mapping[str, Any],
+    weight_analysis: Mapping[str, Any],
+    *,
+    conditional_variable: str,
+) -> list[dict[str, Any]]:
+    values: list[dict[str, Any]] = []
+    for method in POPULATION_METHODS:
+        attribution = twohop_payload["analyses"]["ablation"]["by_method"][method]
+        attribution_key = (
+            "causal_read_given_write"
+            if conditional_variable == "read"
+            else "causal_write_given_read"
+        )
+        values.append(
+            {
+                "method": method,
+                "family": "attribution",
+                "n": int(attribution["n"]),
+                "statistic": attribution["partial_correlations"][attribution_key],
+                "selection_conditioned": False,
+            }
+        )
+        for family in ("mlp", "attention"):
+            family_result = weight_analysis["by_method"][method]["weight_families"][
+                family
+            ]
+            weight_key = (
+                "causal_weight_read_given_write"
+                if conditional_variable == "read"
+                else "causal_write_given_weight_read"
+            )
+            values.append(
+                {
+                    "method": method,
+                    "family": f"{family}_weight",
+                    "n": int(family_result["n"]),
+                    "statistic": family_result["partial_correlations"][weight_key],
+                    "selection_conditioned": True,
+                }
+            )
+    return values
+
+
+def _draw_f6_bars(axis: Any, rows: Sequence[Mapping[str, Any]], *, title: str) -> None:
+    plotted = [row for row in rows if row["statistic"].get("status") == "ESTIMATED"]
+    if not plotted:
+        axis.text(0.5, 0.5, "Not estimable", ha="center", va="center")
+        axis.set_title(title)
+        return
+    family_label = {
+        "attribution": "attribution",
+        "mlp_weight": "MLP weight*",
+        "attention_weight": "attention weight*",
+    }
+    colors = {
+        PRIMARY_DIRECTION_METHOD: "#4477AA",
+        MD_DIRECTION_METHOD: "#EE7733",
+    }
+    hatches = {"attribution": "", "mlp_weight": "//", "attention_weight": "xx"}
+    estimates = [float(row["statistic"]["estimate"]) for row in plotted]
+    low = [float(row["statistic"]["ci_low"]) for row in plotted]
+    high = [float(row["statistic"]["ci_high"]) for row in plotted]
+    positions = np.arange(len(plotted))
+    bars = axis.bar(
+        positions,
+        estimates,
+        color=[colors[str(row["method"])] for row in plotted],
+        edgecolor="0.25",
+    )
+    for bar, row in zip(bars, plotted, strict=True):
+        bar.set_hatch(hatches[str(row["family"])])
+    error = np.maximum(
+        0.0,
+        np.vstack(
+            [
+                np.asarray(estimates) - np.asarray(low),
+                np.asarray(high) - np.asarray(estimates),
+            ]
+        ),
+    )
+    axis.errorbar(
+        positions,
+        estimates,
+        yerr=error,
+        fmt="none",
+        color="black",
+        capsize=3,
+    )
+    labels = [
+        (
+            ("raw" if row["method"] == PRIMARY_DIRECTION_METHOD else "MD")
+            + "\n"
+            + family_label[str(row["family"])]
+            + f"\nN={row['n']}"
+        )
+        for row in plotted
+    ]
+    axis.set_xticks(positions, labels, rotation=12, ha="right")
+    axis.axhline(0.0, color="black", linewidth=1)
+    axis.set(title=title, ylabel="partial correlation (95% bootstrap CI)")
+
+
+def plot_f6_weight_read_robustness(
+    twohop_payload: Mapping[str, Any],
+    weight_analysis: Mapping[str, Any],
+    path: str | Path,
+) -> Path:
+    """Replace F6 with attribution and selection-conditioned weight READ."""
+
+    read_rows = _f6_bar_values(
+        twohop_payload,
+        weight_analysis,
+        conditional_variable="read",
+    )
+    write_rows = _f6_bar_values(
+        twohop_payload,
+        weight_analysis,
+        conditional_variable="write",
+    )
+    figure, axes = plt.subplots(1, 2, figsize=(15, 5.5), constrained_layout=True)
+    _draw_f6_bars(
+        axes[0],
+        read_rows,
+        title="CAUSAL vs READ | WRITE",
+    )
+    _draw_f6_bars(
+        axes[1],
+        write_rows,
+        title="CAUSAL vs WRITE | READ",
+    )
+    figure.suptitle(
+        "F6 — raw/MD attribution and weight READ robustness\n"
+        "* weight estimates are activation-independent but localization-selection-conditioned"
+    )
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(target, dpi=180, bbox_inches="tight", facecolor="white")
+    plt.close(figure)
+    return target.resolve()
 
 
 def spearman_rank_agreement(
@@ -1008,7 +1574,9 @@ def spearman_rank_agreement(
         if math.isfinite(attribution) and math.isfinite(weight):
             records.append(
                 {
-                    "component_id": str(row.get("global_component_id", row["component"])),
+                    "component_id": str(
+                        row.get("global_component_id", row["component"])
+                    ),
                     "attribution": attribution,
                     "weight": weight,
                 }
@@ -1231,7 +1799,9 @@ def plot_f4_localization(
             vmin=-limit,
             vmax=limit,
         )
-        axis.set_xticks(range(len(layers)), [str(layer) for layer in layers], rotation=90)
+        axis.set_xticks(
+            range(len(layers)), [str(layer) for layer in layers], rotation=90
+        )
         axis.set_xlabel("downstream block")
         axis.set_title(
             f"{role.replace('_', ' ')}\n{candidate['name']} "
@@ -1271,24 +1841,298 @@ def _selection_without_rows(selection: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _stable_population_seed(base_seed: int, method: str, name: str) -> int:
+    digest = hashlib.sha256(f"{method}\0{name}".encode()).digest()
+    return int(base_seed + int.from_bytes(digest[:4], "big"))
+
+
+def run_population_weight_read(
+    bundle: Any,
+    lens: Any,
+    twohop_payload: Mapping[str, Any],
+    *,
+    md_artifact_path: str | Path = DEFAULT_MD_ARTIFACT,
+    top_k_mlps: int = POPULATION_COMPONENT_COUNTS["mlps"],
+    top_k_heads: int = POPULATION_COMPONENT_COUNTS["attention_heads"],
+    n_random: int = POPULATION_N_RANDOM,
+    max_length: int = 128,
+    n_bootstrap: int = 5000,
+    seed: int = SEED,
+    expected_counts: Mapping[str, int] | None = EXPECTED_POPULATION_COUNTS,
+) -> dict[str, Any]:
+    """Evaluate fixed-count weight READ for every successful raw and MD row."""
+
+    if top_k_mlps != POPULATION_COMPONENT_COUNTS["mlps"]:
+        raise ValueError("Population component selection is frozen at top 2 MLPs")
+    if top_k_heads != POPULATION_COMPONENT_COUNTS["attention_heads"]:
+        raise ValueError("Population component selection is frozen at top 4 heads")
+    if n_random != POPULATION_N_RANDOM:
+        raise ValueError("Population weight READ is frozen at 32 random directions")
+    if max_length < 1 or n_bootstrap < 1:
+        raise ValueError("max_length and n_bootstrap must be positive")
+    metadata = twohop_payload["metadata"]
+    if metadata.get("model_id") != bundle.model_id:
+        raise ValueError("Two-hop/model ID mismatch in population phase")
+    if metadata.get("model_revision") != bundle.revision:
+        raise ValueError("Two-hop/model revision mismatch in population phase")
+    validate_lens(lens, bundle.lens_model)
+    layer_list = [int(layer) for layer in metadata["workspace_layers"]]
+    if not layer_list or any(layer not in lens.source_layers for layer in layer_list):
+        raise ValueError("Two-hop workspace is not covered by the loaded lens")
+    if int(bundle.lens_model.d_model) != int(lens.d_model):
+        raise ValueError("Lens/model residual dimensions differ")
+
+    by_method = validate_population_source_rows(
+        twohop_payload,
+        expected_counts=expected_counts,
+    )
+    blocks = bundle.lens_model.layers
+    plans: list[dict[str, Any]] = []
+    for method in POPULATION_METHODS:
+        for row in by_method[method]:
+            source = choose_source_layers(
+                row,
+                n_source_layers=1,
+                max_source_layer=len(blocks) - 2,
+            )
+            plans.append(
+                {
+                    "method": method,
+                    "row": row,
+                    "source": source,
+                    "source_layer": int(source["selected_layers"][0]),
+                }
+            )
+
+    device = next(bundle.hf_model.parameters()).device
+    raw_plans = [plan for plan in plans if plan["method"] == PRIMARY_DIRECTION_METHOD]
+    raw_bank = jlens_direction_bank(
+        lens,
+        bundle.lens_model,
+        [int(plan["row"]["token_ids"]["concept"]) for plan in raw_plans],
+        [int(plan["source_layer"]) for plan in raw_plans],
+        fold_rms_gain=False,
+        compute_device=device,
+        output_device=device,
+    )
+
+    artifact_file = Path(md_artifact_path).resolve()
+    coverage = twohop_payload.get("direction_coverage", {}).get(MD_DIRECTION_METHOD, {})
+    declared_artifact = coverage.get("artifact", {}).get("path")
+    if not isinstance(declared_artifact, str):
+        raise ValueError("Two-hop payload does not identify its MD artifact")
+    declared_path = Path(declared_artifact)
+    if not declared_path.is_absolute():
+        declared_path = ROOT / declared_path
+    if declared_path.resolve() != artifact_file:
+        raise ValueError(
+            "Refusing MD direction artifact mismatch relative to notebook 02"
+        )
+    artifact = load_mean_difference_artifact(
+        artifact_file,
+        expected_layers=layer_list,
+        expected_model_id=bundle.model_id,
+        expected_model_revision=bundle.revision,
+    )
+    loaded_artifact_summary = _json_ready(
+        {
+            key: value
+            for key, value in artifact.items()
+            if key not in {"mean_difference", "canonical_lookup"}
+        }
+    )
+    if loaded_artifact_summary != _json_ready(coverage["artifact"]):
+        raise ValueError(
+            "Loaded MD artifact provenance differs from notebook 02's recorded "
+            "artifact summary"
+        )
+    if any(
+        int(width) != int(bundle.lens_model.d_model)
+        for width in artifact["d_model_by_layer"].values()
+    ):
+        raise ValueError("MD artifact residual width differs from the loaded model")
+
+    records: list[dict[str, Any]] = []
+    for plan in plans:
+        row = plan["row"]
+        method = str(plan["method"])
+        source_layer = int(plan["source_layer"])
+        concept_token_id = int(row["token_ids"]["concept"])
+        if method == PRIMARY_DIRECTION_METHOD:
+            direction = raw_bank[concept_token_id][source_layer]
+            direction_source = {
+                "kind": "loaded_jacobian_lens",
+                "formula": "normalize(W_U[token] @ J_source_layer)",
+                "token_id": concept_token_id,
+                "uses_raw_jlens_vector": True,
+            }
+        elif method == MD_DIRECTION_METHOD:
+            canonical = _canonical_concept(str(row["intermediate"]))
+            concept_key = artifact["canonical_lookup"].get(canonical)
+            if concept_key is None:
+                raise ValueError(
+                    f"MD row {row['name']!r} concept absent from its artifact"
+                )
+            direction = artifact["mean_difference"][concept_key][source_layer].to(
+                device
+            )
+            direction_source = {
+                "kind": "independent_mean_difference_artifact",
+                "formula": (
+                    "matched-template mean difference with paired foil excluded"
+                ),
+                "artifact": _relative_or_absolute(artifact_file),
+                "artifact_concept_key": concept_key,
+                "uses_raw_jlens_vector": False,
+            }
+        else:  # pragma: no cover - validated before the model loop
+            raise RuntimeError(f"Unhandled direction method {method!r}")
+
+        input_ids, attention_mask = _row_prompt_tensors(
+            bundle,
+            row,
+            max_length=max_length,
+        )
+        localization = localize_source_direction(
+            bundle.hf_model,
+            blocks,
+            input_ids,
+            direction,
+            source_layer=source_layer,
+            target_token_id=int(row["token_ids"]["target"]),
+            foil_token_id=int(row["token_ids"]["foil"]),
+            attention_mask=attention_mask,
+            intervention_positions=[
+                int(position) for position in row["intervention_positions"]
+            ],
+        )
+        clean_metric_error = float(localization["clean_metric"]) - float(
+            row["clean_metric"]
+        )
+        if not math.isclose(
+            float(localization["clean_metric"]),
+            float(row["clean_metric"]),
+            rel_tol=0.0,
+            abs_tol=POPULATION_CLEAN_METRIC_ATOL,
+        ):
+            raise ValueError(
+                f"Population row {(method, row['name'])!r} clean metric drift: "
+                f"recomputed={localization['clean_metric']}, "
+                f"notebook02={row['clean_metric']}"
+            )
+        flagged = flag_top_components(
+            localization,
+            top_k_mlps=top_k_mlps,
+            top_k_heads=top_k_heads,
+        )
+        component_seed = _stable_population_seed(seed, method, str(row["name"]))
+        weight_read = weight_read_for_flagged_components(
+            blocks,
+            direction,
+            flagged,
+            label_direction=direction,
+            n_random=n_random,
+            seed=component_seed,
+        )
+        concept_weight = summarize_concept_weight_read(weight_read)
+        records.append(
+            {
+                "name": str(row["name"]),
+                "source": row.get("source"),
+                "category": row.get("category"),
+                "prompt": row["prompt"],
+                "intermediate": row["intermediate"],
+                "concept_token_id": concept_token_id,
+                "concept_token_surface": row["token_surfaces"]["concept"],
+                "target_token_id": int(row["token_ids"]["target"]),
+                "foil_token_id": int(row["token_ids"]["foil"]),
+                "direction_method": method,
+                "direction_convention": row["direction_convention"],
+                "direction_source": direction_source,
+                "source_layer": source_layer,
+                "source_selection_rank": 1,
+                "source_selection": plan["source"]["selected"][0],
+                "source_selection_plan": plan["source"],
+                "notebook02_summary": {
+                    "write_strength": float(row["aggregate"]["write_abs_mean"]),
+                    "attribution_read_strength": float(
+                        row["aggregate"]["read_abs_mean"]
+                    ),
+                    "read_strength": float(row["aggregate"]["read_abs_mean"]),
+                    "all_band_ablation_positive_damage": float(
+                        row["ablation"]["positive_damage"]
+                    ),
+                    "clean_metric": float(row["clean_metric"]),
+                    "recomputed_clean_metric": float(localization["clean_metric"]),
+                    "clean_metric_recompute_error": clean_metric_error,
+                    "clean_metric_absolute_tolerance": POPULATION_CLEAN_METRIC_ATOL,
+                },
+                "single_source_localization": localization,
+                "flagged_components": flagged,
+                "weight_read": weight_read,
+                "concept_weight_read": concept_weight,
+            }
+        )
+        print(
+            f"WEIGHT READ {len(records):03d}/{len(plans)} {method} "
+            f"{row['name']} source=L{source_layer}"
+        )
+
+    analysis = analyze_population_weight_read(
+        records,
+        n_bootstrap=n_bootstrap,
+        seed=seed,
+    )
+    return {
+        "status": "COMPUTED",
+        "definition": CONCEPT_WEIGHT_READ_DEFINITION,
+        "sample_counts": {
+            "n_total": len(records),
+            "n_by_method": {
+                method: sum(record["direction_method"] == method for record in records)
+                for method in POPULATION_METHODS
+            },
+        },
+        "source_layer_selection": {
+            "n_source_layers_per_row": 1,
+            "formula": "abs(sum_position(WRITE * attribution_READ))",
+            "plans": [
+                {
+                    "name": str(plan["row"]["name"]),
+                    "direction_method": plan["method"],
+                    **plan["source"],
+                }
+                for plan in plans
+            ],
+        },
+        "md_artifact": loaded_artifact_summary,
+        "records": records,
+        "analysis": analysis,
+        "raw_nulls_retained": True,
+    }
+
+
 def run_localization_phase(
     bundle: Any,
     lens: Any,
     twohop_payload: Mapping[str, Any],
     *,
+    md_artifact_path: str | Path = DEFAULT_MD_ARTIFACT,
     output_path: str | Path | None = None,
     figure_path: str | Path | None = None,
+    f6_figure_path: str | Path | None = None,
     lower_quantile: float = 0.25,
     upper_quantile: float = 0.75,
     n_per_cell: int = 1,
     n_source_layers: int = 1,
-    top_k_mlps: int = 4,
-    top_k_heads: int = 8,
-    n_random: int = 128,
+    top_k_mlps: int = POPULATION_COMPONENT_COUNTS["mlps"],
+    top_k_heads: int = POPULATION_COMPONENT_COUNTS["attention_heads"],
+    n_random: int = POPULATION_N_RANDOM,
     max_length: int = 128,
+    n_bootstrap: int = 5000,
     seed: int = SEED,
 ) -> dict[str, Any]:
-    """Notebook-04 orchestration over successful notebook-02 raw rows."""
+    """Notebook-04 four-item F4 plus full raw/MD weight-READ population."""
 
     metadata = twohop_payload.get("metadata")
     rows = twohop_payload.get("rows")
@@ -1304,126 +2148,55 @@ def run_localization_phase(
         raise ValueError("Notebook-02 model revision does not match loaded model")
     if max_length < 1:
         raise ValueError("max_length must be positive")
+    if n_source_layers != 1:
+        raise ValueError("Population robustness is frozen at one source layer per row")
+    if n_per_cell != 1:
+        raise ValueError("F4 is frozen at one item in each of its four cells")
 
     set_seed(seed)
+    population = run_population_weight_read(
+        bundle,
+        lens,
+        twohop_payload,
+        md_artifact_path=md_artifact_path,
+        top_k_mlps=top_k_mlps,
+        top_k_heads=top_k_heads,
+        n_random=n_random,
+        max_length=max_length,
+        n_bootstrap=n_bootstrap,
+        seed=seed,
+        expected_counts=EXPECTED_POPULATION_COUNTS,
+    )
     selection = select_localization_subset(
         rows,
         lower_quantile=lower_quantile,
         upper_quantile=upper_quantile,
         n_per_cell=n_per_cell,
     )
-    blocks = bundle.lens_model.layers
-    plans: list[dict[str, Any]] = []
-    for item in selection["selected"]:
-        source = choose_source_layers(
-            item["row"],
-            n_source_layers=n_source_layers,
-            max_source_layer=len(blocks) - 2,
-        )
-        plans.append({"selection": item, "source": source})
-
-    token_ids = {
-        int(plan["selection"]["row"]["token_ids"]["concept"]) for plan in plans
+    population_lookup = {
+        (str(record["direction_method"]), str(record["name"])): record
+        for record in population["records"]
     }
-    source_layers = {
-        int(layer) for plan in plans for layer in plan["source"]["selected_layers"]
-    }
-    device = next(bundle.hf_model.parameters()).device
-    direction_bank = jlens_direction_bank(
-        lens,
-        bundle.lens_model,
-        token_ids,
-        source_layers,
-        fold_rms_gain=False,
-        compute_device=device,
-        output_device=device,
-    )
-
     localization_records: list[dict[str, Any]] = []
-    for plan in plans:
-        sampled = plan["selection"]
-        row = sampled["row"]
-        encoded = bundle.tokenizer(
-            str(row["prompt"]),
-            return_tensors="pt",
-            truncation=True,
-            max_length=max_length,
+    plans: list[dict[str, Any]] = []
+    for sampled in selection["selected"]:
+        key = (PRIMARY_DIRECTION_METHOD, str(sampled["name"]))
+        if key not in population_lookup:
+            raise ValueError(f"Selected F4 row missing from population: {key}")
+        source_record = population_lookup[key]
+        f4_record = {
+            **source_record,
+            "direction_formula": source_record["direction_source"]["formula"],
+            "sampling_cell": sampled["cell"],
+            "localization": source_record["single_source_localization"],
+        }
+        localization_records.append(f4_record)
+        plans.append(
+            {
+                "selection": sampled,
+                "source": source_record["source_selection_plan"],
+            }
         )
-        input_ids = encoded.input_ids.to(device)
-        attention_mask = encoded.attention_mask.to(device)
-        untruncated = len(
-            bundle.tokenizer.encode(str(row["prompt"]), add_special_tokens=True)
-        )
-        if untruncated > max_length:
-            raise ValueError(f"Refusing truncated localization for {row['name']!r}")
-        if [int(value) for value in input_ids[0].detach().cpu()] != [
-            int(value) for value in row["prompt_token_ids"]
-        ]:
-            raise ValueError(
-                f"Tokenization drift relative to notebook 02 for {row['name']!r}"
-            )
-        concept_token_id = int(row["token_ids"]["concept"])
-        for source_rank, source_layer in enumerate(
-            plan["source"]["selected_layers"], start=1
-        ):
-            direction = direction_bank[concept_token_id][int(source_layer)]
-            localization = localize_source_direction(
-                bundle.hf_model,
-                blocks,
-                input_ids,
-                direction,
-                source_layer=int(source_layer),
-                target_token_id=int(row["token_ids"]["target"]),
-                foil_token_id=int(row["token_ids"]["foil"]),
-                attention_mask=attention_mask,
-            )
-            flagged = flag_top_components(
-                localization,
-                top_k_mlps=top_k_mlps,
-                top_k_heads=top_k_heads,
-            )
-            component_seed = seed + 1_000_000 * len(localization_records)
-            weight_read = weight_read_for_flagged_components(
-                blocks,
-                direction,
-                flagged,
-                label_direction=direction,
-                n_random=n_random,
-                seed=component_seed,
-            )
-            localization_records.append(
-                {
-                    "name": str(row["name"]),
-                    "source": row.get("source"),
-                    "category": row.get("category"),
-                    "prompt": row["prompt"],
-                    "intermediate": row["intermediate"],
-                    "concept_token_id": concept_token_id,
-                    "concept_token_surface": row["token_surfaces"]["concept"],
-                    "target_token_id": int(row["token_ids"]["target"]),
-                    "foil_token_id": int(row["token_ids"]["foil"]),
-                    "direction_method": PRIMARY_DIRECTION_METHOD,
-                    "direction_formula": "normalize(W_U[token] @ J_source_layer)",
-                    "source_layer": int(source_layer),
-                    "source_selection_rank": source_rank,
-                    "source_selection": next(
-                        item
-                        for item in plan["source"]["selected"]
-                        if int(item["layer"]) == int(source_layer)
-                    ),
-                    "sampling_cell": sampled["cell"],
-                    "notebook02_summary": {
-                        "write_strength": sampled["write_strength"],
-                        "read_strength": sampled["read_strength"],
-                        "all_band_ablation_positive_damage": float(
-                            row["ablation"]["positive_damage"]
-                        ),
-                    },
-                    "localization": localization,
-                    "flagged_components": flagged,
-                    "weight_read": weight_read,
-                }
-            )
 
     agreement = weight_attribution_agreement(localization_records)
     candidates = choose_f4_candidates(selection)
@@ -1434,6 +2207,16 @@ def run_localization_phase(
         else ROOT / "results/figures" / f"f4_read_localization_{model_slug}.png"
     )
     f4 = plot_f4_localization(localization_records, candidates, figure_target)
+    f6_target = (
+        Path(f6_figure_path)
+        if f6_figure_path is not None
+        else ROOT / "results/figures" / f"f6_direction_robustness_{model_slug}.png"
+    )
+    f6 = plot_f6_weight_read_robustness(
+        twohop_payload,
+        population["analysis"],
+        f6_target,
+    )
     payload = {
         "schema_version": SCHEMA_VERSION,
         "status": "COMPUTED",
@@ -1446,11 +2229,14 @@ def run_localization_phase(
             "primary_direction": PRIMARY_DIRECTION_METHOD,
             "primary_direction_formula": "normalize(W_U[token] @ J_layer)",
             "fold_rms_gain": False,
+            "population_direction_methods": list(POPULATION_METHODS),
+            "md_vectors_loaded_from_independent_artifact": True,
             "subset_role": "deterministic descriptive localization subset",
             "component_score_warning": NON_ADDITIVE_WARNING,
             "weight_read_activation_independent": True,
             "n_random": n_random,
             "raw_weight_nulls_retained": True,
+            "population_weight_read_definition": CONCEPT_WEIGHT_READ_DEFINITION,
         },
         "selection": _selection_without_rows(selection),
         "source_layer_selection": {
@@ -1465,28 +2251,33 @@ def run_localization_phase(
             ],
         },
         "sample_counts": {
-            "n_notebook02_raw_success": selection["provenance"][
-                "n_eligible_raw_rows"
-            ],
+            "n_notebook02_raw_success": selection["provenance"]["n_eligible_raw_rows"],
             "n_selected_items": len(selection["selected"]),
             "n_localization_records": len(localization_records),
             "n_flagged_mlps": sum(
-                len(record["weight_read"]["mlps"])
-                for record in localization_records
+                len(record["weight_read"]["mlps"]) for record in localization_records
             ),
             "n_flagged_attention_heads": sum(
                 len(record["weight_read"]["attention_heads"])
                 for record in localization_records
             ),
+            "n_population_records": population["sample_counts"]["n_total"],
+            "n_population_by_method": population["sample_counts"]["n_by_method"],
         },
         "f4_candidates": candidates,
         "localizations": localization_records,
         "attribution_weight_rank_agreement": agreement,
-        "figures": {"f4": _relative_or_absolute(f4)},
+        "population_weight_read": population,
+        "figures": {
+            "f4": _relative_or_absolute(f4),
+            "f6": _relative_or_absolute(f6),
+        },
         "interpretation_guardrail": (
             "No a priori narration class is assigned. Component localization is "
-            "non-additive, weight agreement is descriptive and selection-conditioned, "
-            "and candidates remain candidates until real intervention evidence is interpreted."
+            "non-additive; weight READ is activation-independent but explicitly "
+            "selection-conditioned; raw and MD vectors come from separate validated "
+            "sources; candidates remain candidates until real intervention evidence "
+            "is interpreted."
         ),
     }
     strict_payload = _json_ready(payload)
@@ -1497,8 +2288,9 @@ def run_localization_phase(
     )
     save_json(destination, strict_payload)
     print(
-        f"LOCALIZATION COMPUTED: items={len(selection['selected'])}, "
-        f"sources={len(localization_records)}, direction={PRIMARY_DIRECTION_METHOD}"
+        f"LOCALIZATION COMPUTED: F4 items={len(selection['selected'])}, "
+        f"population={population['sample_counts']['n_total']} "
+        f"({population['sample_counts']['n_by_method']})"
     )
     print(NON_ADDITIVE_WARNING)
     return strict_payload
@@ -1509,9 +2301,10 @@ def run_qwen_localization_phase(
     model_id: str = "Qwen/Qwen2.5-7B-Instruct",
     twohop_path: str | Path | None = None,
     lens_path: str | Path | None = None,
+    md_artifact_path: str | Path = DEFAULT_MD_ARTIFACT,
     **phase_kwargs: Any,
 ) -> dict[str, Any]:
-    """Model-loading notebook-04 entry point."""
+    """Load one model and run F4 plus all-row raw/MD weight robustness."""
 
     if not model_id.startswith("Qwen/Qwen2.5-"):
         raise ValueError("Localization entry point is restricted to Qwen2.5")
@@ -1535,6 +2328,7 @@ def run_qwen_localization_phase(
             bundle,
             lens,
             twohop_payload,
+            md_artifact_path=md_artifact_path,
             **phase_kwargs,
         )
     finally:
