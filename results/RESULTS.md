@@ -2,7 +2,7 @@
 
 ## Current verdict
 
-**G-ALPHA FAILED; STAGE 2 AND STAGE 3 SKIPPED.** Stage 4 is required. This is a calibration limitation, not a hypothesis verdict.
+**V3 COMPLETE — CALIBRATION/READ-POSITIVE-CONTROL LIMITATION; NO HYPOTHESIS VERDICT.** G-SWAP passed, but no frozen alpha satisfied G-ALPHA. Stage 2 and Stage 3 were skipped by prerequisite, and P1-P3 remain untested.
 
 ## Environment
 
@@ -146,3 +146,49 @@ not relabeled as a Stage-2 result at a nonexistent alpha*.
 
 These notebooks are executed model-free guards. They do not import historical
 science values or treat missing measurements as negative effects.
+
+## Stage 4 — calibration-limitation result
+
+**Classification: CALIBRATION_READ_POSITIVE_CONTROL_LIMITATION.** The working v2 intervention
+was reproducible, and v3 again confirmed all three alpha-2 sentinel swaps.
+However, the frozen source-capped surgical policy reached at most
+**2/3** known-answer flips over the
+full alpha grid, so it never met G-SWAP.
+
+The strongest exploratory alternative, a carrying-position fractional swap at
+alpha=1.50, flipped **3/3** cases and passed the random and absent-coordinate
+checks. Its narration changes were small on **8/8** passages, but G-POS was
+**0/8** because low primary weight-READ was **0/8**; the mask-specific ratios
+were fr1=0.849, fr2=1.000, de1=1.000, de2=1.118, es1=1.000, es2=1.000, it1=1.247, it2=1.121, all above the <=0.50 criterion. One passage (`es2`) also
+lacked clean continuation capability. These ratios are fixed-mask properties,
+so tuning alpha cannot repair that subgate.
+
+Capability delta NLL was exactly zero for the masked policies only because
+**24/24**
+unrelated-text masks were empty.
+This is evidence that the detector did not fire on that fixed bank, not an
+active-edit capability stress test. The all-position reference did actively
+edit those texts; at alpha=2 its signed mean delta NLL was
+**+0.623** and mean
+absolute delta NLL was
+**0.669**.
+
+### Claim boundary
+
+- P1, P2, and P3 are **NOT TESTED**.
+- This run does **not** show that the Written-vs-Read hypothesis is false.
+- It shows that the frozen intervention plus primary weight-READ positive
+  control could not be jointly calibrated on open Qwen2.5-7B.
+- Stage-2 independent weight-READ validation was never licensed and remains
+  outstanding.
+
+The requested legacy comparison is descriptive only: invalidated v1 reported
+J-Lens `r=0.608` versus identity-J/logit-lens
+`r=0.639` at `N=155`.
+Those values come from commit `6666385cff42fe4053412e7230ec9f55b0259f79` and cannot be
+used as evidence for P1-P3 because that instrument failed its gates.
+
+The complete alpha sweep is in `results/metrics.json`; the full raw draw-level
+artifact is `data/raw/v3/015_alpha_sweep.json` with SHA-256
+`ef53591af7e331607d7fafc43d6f3d08e2687e68197b9e925f7ee1a60e0e0cd5`. F-ALPHA is the only new figure licensed by
+the v3 gate chain.

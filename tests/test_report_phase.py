@@ -477,26 +477,29 @@ def test_notebook08_persists_guarded_stage4_fallback_and_is_executed() -> None:
         for output in cell.get("outputs", [])
     )
     assert all(cell.get("id") for cell in notebook["cells"])
-    assert "persist_stage4" in source
+    assert "record_stage4_fallback" in source
     assert "results/RESULTS.md" in source
     assert "stage3_notebooks" in source
     assert "SKIPPED_PREREQUISITE" in source
-    assert "science_executed" in source
-    assert "model_inference_run" in source
-    assert "P1 | **NOT_TESTED**" in source
+    assert "claim_boundary" in source
+    assert "hypothesis_false_established" in source
+    assert "NOT_TESTED" in source
     assert "hypothesis" in source.lower()
     assert "load_model(" not in source
     assert "AutoModel" not in source
 
     live_metrics = json.loads(
         (Path(__file__).resolve().parents[1] / "results/metrics.json").read_text()
-    )["repair_v2"]
-    assert live_metrics["gate_ledger"]["stage4_report"] == "COMPLETE"
+    )["calibration_v3"]
+    assert live_metrics["gate_ledger"]["stage4_report"] == "PASS"
     assert live_metrics["gate_ledger"]["stage3_science"] == (
         "SKIPPED_PREREQUISITE"
     )
-    assert live_metrics["stage4_report"]["predictions"] == {
+    assert live_metrics["stage4_fallback"]["predictions"] == {
         "P1": "NOT_TESTED",
         "P2": "NOT_TESTED",
         "P3": "NOT_TESTED",
     }
+    assert not live_metrics["stage4_fallback"]["claim_boundary"][
+        "hypothesis_false_established"
+    ]

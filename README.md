@@ -1,34 +1,40 @@
-# Written vs. Read — repair-first replication
+# Written vs. Read — surgical intervention calibration
 
 This repository tests whether a concept's causal influence is better explained
 by downstream components **READING** its residual-stream direction than by the
-strength with which that direction is **WRITTEN**. Version 2 is governed by a
-hard calibration chain: no scientific conclusion is permitted until a known
-concept swap and the positive/control gates pass.
+strength with which that direction is **WRITTEN**. Version 3 keeps the repaired
+v2 instrument immutable, sweeps intervention strength and surgical position
+rules, and permits no science until every calibration gate passes.
 
 ## Current status
 
-**G-SWAP, G-DIR, and repaired READ validation pass, but Stage-2 calibration
-fails; Stage-3 science was skipped and the Stage-4 replication-failure report
-is complete. There is no v2 hypothesis verdict.**
-The redesigned controls fire, and the matched-random and absent-coordinate
-specificity checks pass. Capability preservation fails (mean delta NLL
-`+0.623`), and the known-narration positive control reproduces only 1/8 cases
-against its frozen 6/8 threshold. Notebooks 05–07 are executed model-free skip
-records, and notebook 08 persists the final Stage-4 claim boundary. The earlier
-`NOT SUPPORTED` and `REFUTED` labels at commit
-`6666385cff42fe4053412e7230ec9f55b0259f79` are retained only as legacy
-diagnostics. Both old model scales failed the strict spider→ant top-1 swap,
-the independent direction finder failed its gate, the narration positive
-control reproduced 0/8, and the output-suppression metric was structurally
-unable to fire. Those failures invalidate a hypothesis-level inference.
+**V3 is complete with a calibration/READ-positive-control limitation and no
+hypothesis verdict.** Stage 0 and G-SWAP pass, but no frozen intervention passes
+G-ALPHA, so no alpha* exists. Stage 2 and all Stage 3 science notebooks are
+executed model-free prerequisite skips; P1–P3 remain untested.
+
+The frozen source-capped carrying-position policy reaches at most 2/3 swaps.
+An exploratory masked fractional swap reaches 3/3 at alpha 1.5 and passes the
+random and absent-coordinate checks, but G-POS is 0/8 because every primary
+weight-READ ratio exceeds the <=0.50 criterion. Its zero capability delta is a
+structural no-op: all 24/24 unrelated-text masks are empty. See
+[the live report](results/RESULTS.md) for the complete 24-row sweep and claim
+boundary.
+
+## Prior repair evidence (v2 context)
+
+V2 established the working three-case swap, held-out direction retrieval,
+firing controls, and the need to treat attribution READ as secondary. Its
+alpha-2 all-position edit damaged unrelated capability (signed mean delta NLL
+`+0.623`) and reproduced G-POS only 1/8. V3 preserves those metrics under the
+immutable `repair_v2` namespace rather than rewriting them.
 
 Stage 0 found that Anthropic's pinned public Jacobian Lens walkthrough loads a
 model/lens and performs readout, but ships no executable causal swap or
 ablation helper. The spider→ant row in `probe-swap.json` is prompt metadata,
 not code. Therefore an unchanged upstream causal replication is **not
 runnable**, and the release does not distinguish a local implementation bug
-from a model mismatch. See [the live report](results/RESULTS.md).
+from a model mismatch.
 
 Notebook 01 then selected Qwen2.5-7B layers 13–24 from clean readout
 visibility, resolved exact upstream labels before leading-space alternatives,
@@ -77,22 +83,20 @@ The stored signed convention is `delta = M_edited - M_clean`, where
 `M = logit(target) - logit(foil)`. Positive ablation damage is explicitly
 reported as `M_clean - M_edited`.
 
-## Repair-first workflow
+## V3 calibration workflow
 
 The required notebook chain is:
 
-1. `00_preflight_and_stage0.ipynb` — environment, pinned upstream readout, and
-   release audit.
-2. `01_repair_swap.ipynb` — layers/positions/basis/token-surface/strength
-   calibration and hard G-SWAP.
-3. `02_concept_finder.ipynb` — independent mean-difference direction and G-DIR,
-   only after G-SWAP.
-4. `03_read_and_validation.ipynb` — reconcile attribution and weight READ.
-5. `04_recalibration.ipynb` — firing controls and the narration G-POS gate.
-6. `05_science_twohop.ipynb`, `06_science_ambiguity.ipynb`, and
-   `07_scale.ipynb` — scientific tests only if every prerequisite passes.
-7. `08_report.ipynb` — calibrated science report or an explicit Stage-4
-   replication-failure report.
+1. `00_preflight_and_reverify.ipynb` — fresh environment checks and bounded v2
+   instrument re-verification.
+2. `01_confirm_swap.ipynb` — repeat the three-case G-SWAP sentinel.
+3. `015_alpha_sweep.ipynb` — eight strengths, three intervention policies,
+   capability/G-POS/null gates, and F-ALPHA.
+4. `04_recalibration.ipynb` — alpha*-specific gates, or an explicit no-alpha
+   prerequisite record.
+5. `05_science_twohop.ipynb`, `06_science_ambiguity.ipynb`, and
+   `07_scale.ipynb` — science only after a valid alpha* and Stage-2 pass.
+6. `08_report.ipynb` — calibrated science verdict or Stage-4 limitation report.
 
 If a gate fails after an honest repair attempt, later notebooks execute only a
 prerequisite guard and record `SKIPPED_PREREQUISITE`; they do not run model
@@ -116,7 +120,7 @@ cd "$HOME/j-space-thoughts"
 .venv/bin/python -m pytest -q
 ```
 
-The v2 notebooks are executed in place with the `j-space-thoughts` kernel and
+The v3 notebooks are executed in place with the `j-space-thoughts` kernel and
 a 14,400-second timeout. Model weights, fitted lenses, raw caches, and other
 large intermediates remain ignored; curated metrics, executed notebooks, and
 figures are committed.
