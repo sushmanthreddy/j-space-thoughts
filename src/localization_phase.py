@@ -39,6 +39,7 @@ from src.jlens_iface import (
 )
 from src.metrics import (
     partial_correlation_with_ci,
+    pearson_with_ci,
     save_json,
     standardized_regression_with_ci,
 )
@@ -1280,6 +1281,7 @@ def _safe_weight_regression(
     write: Sequence[float],
     weight_read: Sequence[float],
     *,
+    interaction: bool,
     n_bootstrap: int,
     seed: int,
 ) -> dict[str, Any]:
@@ -1288,7 +1290,7 @@ def _safe_weight_regression(
             causal,
             write,
             weight_read,
-            interaction=False,
+            interaction=interaction,
             n_bootstrap=n_bootstrap,
             confidence=0.95,
             seed=seed,
@@ -1308,6 +1310,30 @@ def _safe_weight_regression(
             "read": "selection-conditioned concept-level weight_READ",
         },
     }
+
+
+def _safe_weight_pearson(
+    first: Sequence[float],
+    second: Sequence[float],
+    *,
+    n_bootstrap: int,
+    seed: int,
+) -> dict[str, Any]:
+    try:
+        result = pearson_with_ci(
+            first,
+            second,
+            n_bootstrap=n_bootstrap,
+            confidence=0.95,
+            seed=seed,
+        )
+    except (ValueError, np.linalg.LinAlgError) as error:
+        return {
+            "status": "NOT_ESTIMABLE",
+            "error_type": type(error).__name__,
+            "error": str(error),
+        }
+    return {"status": "ESTIMATED", **result}
 
 
 def analyze_population_weight_read(
@@ -1358,6 +1384,22 @@ def analyze_population_weight_read(
                 for record in selected
             ]
             statistic_seed = seed + 10_000 * method_index + 100 * family_index
+            additive_regression = _safe_weight_regression(
+                causal,
+                write,
+                weight,
+                interaction=False,
+                n_bootstrap=n_bootstrap,
+                seed=statistic_seed + 3,
+            )
+            interaction_regression = _safe_weight_regression(
+                causal,
+                write,
+                weight,
+                interaction=True,
+                n_bootstrap=n_bootstrap,
+                seed=statistic_seed + 4,
+            )
             families[family] = {
                 "n": len(selected),
                 "weight_read_definition": CONCEPT_WEIGHT_READ_DEFINITION[family],
@@ -1377,13 +1419,20 @@ def analyze_population_weight_read(
                         seed=statistic_seed + 2,
                     ),
                 },
-                "standardized_regression": _safe_weight_regression(
-                    causal,
-                    write,
-                    weight,
-                    n_bootstrap=n_bootstrap,
-                    seed=statistic_seed + 3,
-                ),
+                "pearson": {
+                    "write_vs_weight_read": _safe_weight_pearson(
+                        write,
+                        weight,
+                        n_bootstrap=n_bootstrap,
+                        seed=statistic_seed + 5,
+                    )
+                },
+                "regressions": {
+                    "causal_on_write_plus_weight_read": additive_regression,
+                    "causal_on_write_times_weight_read": interaction_regression,
+                },
+                # Backward-compatible alias used by pre-v2 report consumers.
+                "standardized_regression": additive_regression,
                 "raw_vectors": {
                     "item_names": names,
                     "causal_positive_damage": causal,

@@ -537,6 +537,14 @@ def test_population_weight_analysis_and_f6_cover_both_methods_and_families(
                 == "ESTIMATED"
             )
             assert result["standardized_regression"]["status"] == "ESTIMATED"
+            assert result["pearson"]["write_vs_weight_read"]["status"] == "ESTIMATED"
+            additive = result["regressions"]["causal_on_write_plus_weight_read"]
+            interaction = result["regressions"]["causal_on_write_times_weight_read"]
+            assert additive["status"] == "ESTIMATED"
+            assert additive["interaction"] is False
+            assert interaction["status"] == "ESTIMATED"
+            assert interaction["interaction"] is True
+            assert "write_x_read" in interaction["coefficients"]
     path = plot_f6_weight_read_robustness(
         _synthetic_twohop_for_f6(),
         analysis,
