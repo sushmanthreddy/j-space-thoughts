@@ -1,0 +1,113 @@
+{
+  "baseline": {
+    "head": "eb9e44144de7d05d4a8e93f975d1af1351b0d87d",
+    "source_decision": "GO",
+    "source_metrics_path": "/home/jovyan/j-space-thoughts/results/metrics.json",
+    "source_metrics_sha256": "5a9218bdc18f7e12fc8685a96da545e2c213019361e7717b8467d17ec5ccd7f0",
+    "source_run_status": "COMPLETE"
+  },
+  "check1": {
+    "correlations": {
+      "READ_IG": {
+        "bootstrap_draws": 10000,
+        "bootstrap_seed": 1729,
+        "bootstrap_unit": "dependency_group",
+        "ci95_high": 0.12601395213937172,
+        "ci95_low": -0.4313773341424785,
+        "ci_high": 0.12601395213937172,
+        "ci_low": -0.4313773341424785,
+        "ci_lower_above_zero": false,
+        "confidence": 0.95,
+        "estimate": -0.17911036332088964,
+        "group_key": "dependency_group",
+        "n_dependency_groups": 24,
+        "n_rows": 77,
+        "p_value_descriptive": 0.11908802161803947,
+        "score_key": "READ_IG",
+        "statistic": "spearman_rho",
+        "target_key": "abs_C",
+        "undefined_bootstrap_draws": 0,
+        "valid_bootstrap_draws": 10000
+      },
+      "READ_local": {
+        "bootstrap_draws": 10000,
+        "bootstrap_seed": 1729,
+        "bootstrap_unit": "dependency_group",
+        "ci95_high": 0.1947310719351505,
+        "ci95_low": -0.45037004986356555,
+        "ci_high": 0.1947310719351505,
+        "ci_low": -0.45037004986356555,
+        "ci_lower_above_zero": false,
+        "confidence": 0.95,
+        "estimate": -0.1592880803407119,
+        "group_key": "dependency_group",
+        "n_dependency_groups": 24,
+        "n_rows": 77,
+        "p_value_descriptive": 0.1664387539963255,
+        "score_key": "READ_local",
+        "statistic": "spearman_rho",
+        "target_key": "abs_C",
+        "undefined_bootstrap_draws": 0,
+        "valid_bootstrap_draws": 10000
+      },
+      "weight_norm_baseline": {
+        "bootstrap_draws": 10000,
+        "bootstrap_seed": 1729,
+        "bootstrap_unit": "dependency_group",
+        "ci95_high": 0.051357013586958405,
+        "ci95_low": -0.4918333683677672,
+        "ci_high": 0.051357013586958405,
+        "ci_low": -0.4918333683677672,
+        "ci_lower_above_zero": false,
+        "confidence": 0.95,
+        "estimate": -0.25246771734788015,
+        "group_key": "dependency_group",
+        "n_dependency_groups": 24,
+        "n_rows": 77,
+        "p_value_descriptive": 0.026747892080905424,
+        "score_key": "weight_norm_baseline",
+        "statistic": "spearman_rho",
+        "target_key": "abs_C",
+        "undefined_bootstrap_draws": 0,
+        "valid_bootstrap_draws": 10000
+      }
+    },
+    "figure": "results/v6/figures/F_v6_1_engine_only_read_vs_c.png",
+    "interpretation": "ARTIFACT_SIDE_CI_SPANS_ZERO",
+    "n_dependency_groups": 24,
+    "n_engines": 77,
+    "raw_artifact": {
+      "bytes": 901325,
+      "path": "results/v6/raw/v6_1_within_engine.json",
+      "sha256": "b038a8037851abe1c84c4001b06981e8f731ab48538d4b9b7f4eca6961a95705"
+    },
+    "status": "COMPLETE",
+    "supports_positive_graded_use": false,
+    "within_engine_auc": {
+      "abs_C_max": 1.0120253164556963,
+      "abs_C_median": 0.9127144298688193,
+      "abs_C_min": 0.7857889237199582,
+      "largest_adjacent_gap": 0.025226195070538582,
+      "reason": "All frozen engines are strongly causal and the protocol defines no weak/strong cutoff; introducing a held-out threshold now would be post-hoc.",
+      "rows_below_largest_gap": 1,
+      "status": "NOT_RUN_NO_PREREGISTERED_OR_NATURAL_SPLIT"
+    }
+  },
+  "frozen_protocol": {
+    "bootstrap_draws": 10000,
+    "bootstrap_seed": 1729,
+    "bootstrap_unit": "unordered concept dependency group",
+    "estimator_retuned": false,
+    "folds": 5,
+    "ig_steps": 16,
+    "model": {
+      "dtype": "torch.bfloat16",
+      "id": "Qwen/Qwen2.5-7B-Instruct",
+      "revision": "a09a35458c702b33eeacc393d103063234e8bc28"
+    },
+    "position_rule": "explicit_concept_token_in_shared_context",
+    "source_layer": 16
+  },
+  "schema_version": "read-stress-v6-isolated-v1",
+  "status": "CHECK_1_COMPLETE"
+}
