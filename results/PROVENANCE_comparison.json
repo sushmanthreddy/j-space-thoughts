@@ -1,0 +1,17 @@
+{
+  "absolute_tolerance": 0.001,
+  "compared_leaf_fields": 80,
+  "excluded_context_fields": [
+    "snapshot",
+    "source_commit",
+    "branch",
+    "source_hashes",
+    "comparison_policy"
+  ],
+  "post_path": "results/PROVENANCE_post_refactor.json",
+  "pre_path": "results/PROVENANCE_pre_refactor.json",
+  "regression_count": 0,
+  "regressions": [],
+  "relative_tolerance": 0.001,
+  "status": "PASS"
+}

@@ -1,0 +1,126 @@
+{
+  "schema_version": "selection-audit-rejected-c-v1",
+  "audit_source_commit": "1a1c6ff77f25389234d4b661f2cfd49fec4c4926",
+  "source": {
+    "dataset_artifact": "artifacts/final/01_dataset.json",
+    "dataset_artifact_sha256": "4d15652b0491aef16df59756d0d7cf0245957f591045574c26fe92dd1908fb8a",
+    "dataset_schema_version": "symmetric-dataset-verification-v1",
+    "protocol_sha256": "0b1858e3b5c52181b0dd57551dc7a9917ad16c0b505b2fbb3e954551546d51a0",
+    "model_id": "Qwen/Qwen2.5-7B-Instruct",
+    "model_revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+    "dtype": "torch.bfloat16",
+    "selected_layer": 16,
+    "position_rule": "explicit_concept_token_in_shared_context",
+    "written_threshold": 2.482430934906006
+  },
+  "eligibility_rule": {
+    "description": "An evaluation candidate is eligible only when both concepts pass WRITTEN and the candidate is rejected for a non-WRITTEN reason such as a clean-answer failure. Concept-not-WRITTEN exclusions are explicitly out of scope.",
+    "requires_evaluation_split": true,
+    "requires_rejected_status": true,
+    "requires_both_concepts_written": true,
+    "requires_non_written_rejection_reason": true
+  },
+  "planned_causal_measurement": {
+    "source_module": "src/causal_read.py",
+    "variant": "full_residual",
+    "signed_unclipped": true,
+    "both_swap_directions": true,
+    "normalization": "engine_clean_metric_a_minus_clean_metric_b",
+    "would_reuse_frozen_model_layer_and_positions": true,
+    "executed": false,
+    "not_executed_reason": "No rejected evaluation candidate satisfies the audit eligibility rule."
+  },
+  "counts": {
+    "evaluation_candidates": 93,
+    "verified_evaluation_candidates": 77,
+    "unverified_evaluation_candidates": 16,
+    "written_only_exclusions": 16,
+    "non_written_rejections": 0,
+    "eligible_rejected_candidates": 0,
+    "causal_computations_performed": 0,
+    "read_invocations": 0
+  },
+  "written_only_exclusions": [
+    {
+      "pair_id": "symmetric-007",
+      "relation_family": "atomic-number-element-symbol",
+      "failing_sides": ["A", "B"]
+    },
+    {
+      "pair_id": "symmetric-010",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["B"]
+    },
+    {
+      "pair_id": "symmetric-011",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["B"]
+    },
+    {
+      "pair_id": "symmetric-012",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["B"]
+    },
+    {
+      "pair_id": "symmetric-014",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["B"]
+    },
+    {
+      "pair_id": "symmetric-033",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["B"]
+    },
+    {
+      "pair_id": "symmetric-045",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["A"]
+    },
+    {
+      "pair_id": "symmetric-046",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["A"]
+    },
+    {
+      "pair_id": "symmetric-061",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["A"]
+    },
+    {
+      "pair_id": "symmetric-062",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["A"]
+    },
+    {
+      "pair_id": "symmetric-063",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["A"]
+    },
+    {
+      "pair_id": "symmetric-064",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["A"]
+    },
+    {
+      "pair_id": "symmetric-065",
+      "relation_family": "city-country-capital",
+      "failing_sides": ["A"]
+    },
+    {
+      "pair_id": "symmetric-071",
+      "relation_family": "us-city-state-capital",
+      "failing_sides": ["B"]
+    },
+    {
+      "pair_id": "symmetric-072",
+      "relation_family": "us-city-state-capital",
+      "failing_sides": ["B"]
+    },
+    {
+      "pair_id": "symmetric-075",
+      "relation_family": "us-city-state-capital",
+      "failing_sides": ["B"]
+    }
+  ],
+  "rows": []
+}
