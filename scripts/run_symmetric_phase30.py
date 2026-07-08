@@ -12,6 +12,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
+from src.causal_read import (
+    clean_state_and_logits,
+    symmetric_interchange,
+    token_difference_metric,
+)
 from src.concept_vectors import residual_prompt_matrices
 from src.data_gen import (
     G1_PROMPTS,
@@ -34,8 +39,10 @@ ROOT = Path("/home/jovyan/j-space-thoughts")
 RAW_DIR = ROOT / "data/raw/v6"
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 METRICS_PATH = ROOT / "results/metrics.json"
+CLEAN_MANIFEST_PATH = RAW_DIR / "30_clean_read_manifest.json"
 FAILED_FORMAT_PATH = RAW_DIR / "30_dataset_and_verification_attempt1_unverified.json"
 FAILED_DASHBOARD_PATH = RAW_DIR / "30_dataset_and_verification_attempt2_dashboard_void.json"
+FAILED_L26_CAUSAL_PATH = RAW_DIR / "31_causal_ground_truth_attempt1_l26_void.json"
 MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
 SEED = 1729
 LAYERS = list(range(13, 27))
@@ -86,7 +93,8 @@ protocol = {
     "position_rule": POSITION_RULE,
     "layer_candidates": LAYERS,
     "layer_selection": (
-        "calibration maximum own>foil rate, then median margin, then lower layer"
+        "calibration maximum median(|C_engine|)-median(|C_dashboard|), then "
+        "engine median |C|, own>foil rate, and lower layer"
     ),
     "written_threshold": (
         "calibration maximum balanced accuracy with own recall>=0.80; "
@@ -214,6 +222,35 @@ direction_bank = jlens_direction_bank(
 calibration_indices = [
     index for index, pair in enumerate(tokenized_pairs) if pair["split"] == "calibration"
 ]
+def choose_written_threshold(own_scores: list[float], foil_scores: list[float]) -> dict:
+    own_array = np.asarray(own_scores)
+    foil_array = np.asarray(foil_scores)
+    threshold_rows = []
+    for threshold in np.unique(np.concatenate([own_array, foil_array])):
+        recall = float(np.mean(own_array >= threshold))
+        specificity = float(np.mean(foil_array < threshold))
+        if recall < 0.80:
+            continue
+        threshold_rows.append(
+            {
+                "threshold": float(threshold),
+                "own_recall": recall,
+                "foil_specificity": specificity,
+                "balanced_accuracy": 0.5 * (recall + specificity),
+            }
+        )
+    if not threshold_rows:
+        raise RuntimeError("No calibration WRITTEN threshold attains recall >=0.80")
+    return max(
+        threshold_rows,
+        key=lambda row: (
+            row["balanced_accuracy"],
+            row["own_recall"],
+            -row["threshold"],
+        ),
+    )
+
+
 layer_selection_rows = []
 for layer in LAYERS:
     own_scores: list[float] = []
@@ -237,6 +274,7 @@ for layer in LAYERS:
             ]
         )
     margins = np.asarray(own_scores) - np.asarray(foil_scores)
+    threshold_record_for_layer = choose_written_threshold(own_scores, foil_scores)
     layer_selection_rows.append(
         {
             "layer": layer,
@@ -244,69 +282,163 @@ for layer in LAYERS:
             "own_greater_rate": float(np.mean(margins > 0.0)),
             "median_own_minus_foil": float(np.median(margins)),
             "mean_own_minus_foil": float(np.mean(margins)),
+            "calibration_own_scores": own_scores,
+            "calibration_foil_scores": foil_scores,
+            "threshold_record": threshold_record_for_layer,
         }
     )
+
+
+def encode(prompt: str) -> torch.Tensor:
+    return bundle.tokenizer.encode(
+        prompt, add_special_tokens=False, return_tensors="pt"
+    ).to(next(bundle.hf_model.parameters()).device)
+
+
+for layer_record in layer_selection_rows:
+    layer = int(layer_record["layer"])
+    threshold = float(layer_record["threshold_record"]["threshold"])
+    matrix = context_matrices[layer]
+    calibration_causal_rows = []
+    for index in calibration_indices:
+        pair = tokenized_pairs[index]
+        row_a, row_b = 2 * index, 2 * index + 1
+        vector_a = direction_bank[int(pair["concept_a_token_id"])][layer]
+        vector_b = direction_bank[int(pair["concept_b_token_id"])][layer]
+        written = (
+            float(torch.dot(matrix[row_a], vector_a)) >= threshold
+            and float(torch.dot(matrix[row_b], vector_b)) >= threshold
+        )
+        clean_correct = all(
+            (
+                int(engine_records[row_a]["rank"]) == 1,
+                int(engine_records[row_b]["rank"]) == 1,
+                int(dashboard_records[row_a]["rank"]) == 1,
+                int(dashboard_records[row_b]["rank"]) == 1,
+            )
+        )
+        if not written or not clean_correct:
+            continue
+        position_a = int(pair["context_position_a"])
+        position_b = int(pair["context_position_b"])
+        engine_ids_a = encode(pair["engine_prompt_a"])
+        engine_ids_b = encode(pair["engine_prompt_b"])
+        engine_clean_a = clean_state_and_logits(
+            bundle.hf_model,
+            bundle.lens_model.layers,
+            engine_ids_a,
+            layer,
+            position=position_a,
+        )
+        engine_clean_b = clean_state_and_logits(
+            bundle.hf_model,
+            bundle.lens_model.layers,
+            engine_ids_b,
+            layer,
+            position=position_b,
+        )
+        engine = symmetric_interchange(
+            bundle.hf_model,
+            bundle.lens_model.layers,
+            engine_ids_a,
+            engine_ids_b,
+            engine_clean_a,
+            engine_clean_b,
+            token_difference_metric(
+                pair["answer_a_token_id"], pair["answer_b_token_id"]
+            ),
+            pair_id=pair["pair_id"],
+            task_kind="engine",
+            layer=layer,
+            variant="full_residual",
+            position_a=position_a,
+            position_b=position_b,
+        )
+        dashboard_ids_a = encode(pair["dashboard_prompt_a"])
+        dashboard_ids_b = encode(pair["dashboard_prompt_b"])
+        dashboard_clean_a = clean_state_and_logits(
+            bundle.hf_model,
+            bundle.lens_model.layers,
+            dashboard_ids_a,
+            layer,
+            position=position_a,
+        )
+        dashboard_clean_b = clean_state_and_logits(
+            bundle.hf_model,
+            bundle.lens_model.layers,
+            dashboard_ids_b,
+            layer,
+            position=position_b,
+        )
+        dashboard = symmetric_interchange(
+            bundle.hf_model,
+            bundle.lens_model.layers,
+            dashboard_ids_a,
+            dashboard_ids_b,
+            dashboard_clean_a,
+            dashboard_clean_b,
+            token_difference_metric(
+                pair["dashboard_token_id"], pair["dashboard_distractor_token_id"]
+            ),
+            pair_id=pair["pair_id"],
+            task_kind="dashboard",
+            layer=layer,
+            normalization_t=engine["T"],
+            variant="full_residual",
+            position_a=position_a,
+            position_b=position_b,
+        )
+        calibration_causal_rows.append(
+            {
+                "pair_id": pair["pair_id"],
+                "engine_C": engine["C"],
+                "dashboard_C": dashboard["C"],
+                "engine_R_a_from_b": engine["R_a_from_b"],
+                "engine_R_b_from_a": engine["R_b_from_a"],
+                "dashboard_R_a_from_b": dashboard["R_a_from_b"],
+                "dashboard_R_b_from_a": dashboard["R_b_from_a"],
+            }
+        )
+    if len(calibration_causal_rows) < 10:
+        raise RuntimeError(f"Layer {layer} has too few verified calibration pairs")
+    engine_abs = np.abs([row["engine_C"] for row in calibration_causal_rows])
+    dashboard_abs = np.abs([row["dashboard_C"] for row in calibration_causal_rows])
+    layer_record["calibration_causal_rows"] = calibration_causal_rows
+    layer_record["n_causal_calibration_pairs"] = len(calibration_causal_rows)
+    layer_record["engine_abs_C_median"] = float(np.median(engine_abs))
+    layer_record["dashboard_abs_C_median"] = float(np.median(dashboard_abs))
+    layer_record["causal_separation"] = float(
+        np.median(engine_abs) - np.median(dashboard_abs)
+    )
+    print(
+        f"calibration L{layer}: n={len(calibration_causal_rows)} "
+        f"median|C| engine={layer_record['engine_abs_C_median']:.4f} "
+        f"dashboard={layer_record['dashboard_abs_C_median']:.4f} "
+        f"separation={layer_record['causal_separation']:.4f}"
+    )
+
 selected_record = max(
     layer_selection_rows,
     key=lambda row: (
+        row["causal_separation"],
+        row["engine_abs_C_median"],
         row["own_greater_rate"],
-        row["median_own_minus_foil"],
         -row["layer"],
     ),
 )
 selected_layer = int(selected_record["layer"])
-
-calibration_own: list[float] = []
-calibration_foil: list[float] = []
-matrix = context_matrices[selected_layer]
-for index in calibration_indices:
-    pair = tokenized_pairs[index]
-    row_a, row_b = 2 * index, 2 * index + 1
-    vector_a = direction_bank[int(pair["concept_a_token_id"])][selected_layer]
-    vector_b = direction_bank[int(pair["concept_b_token_id"])][selected_layer]
-    calibration_own.extend(
-        [
-            float(torch.dot(matrix[row_a], vector_a)),
-            float(torch.dot(matrix[row_b], vector_b)),
-        ]
-    )
-    calibration_foil.extend(
-        [
-            float(torch.dot(matrix[row_a], vector_b)),
-            float(torch.dot(matrix[row_b], vector_a)),
-        ]
-    )
-own_array = np.asarray(calibration_own)
-foil_array = np.asarray(calibration_foil)
-threshold_candidates = np.unique(np.concatenate([own_array, foil_array]))
-threshold_rows = []
-for threshold in threshold_candidates:
-    recall = float(np.mean(own_array >= threshold))
-    specificity = float(np.mean(foil_array < threshold))
-    if recall < 0.80:
-        continue
-    threshold_rows.append(
-        {
-            "threshold": float(threshold),
-            "own_recall": recall,
-            "foil_specificity": specificity,
-            "balanced_accuracy": 0.5 * (recall + specificity),
-        }
-    )
-if not threshold_rows:
-    raise RuntimeError("No calibration WRITTEN threshold attains recall >=0.80")
-threshold_record = max(
-    threshold_rows,
-    key=lambda row: (
-        row["balanced_accuracy"],
-        row["own_recall"],
-        -row["threshold"],
-    ),
-)
+threshold_record = selected_record["threshold_record"]
 written_threshold = float(threshold_record["threshold"])
+calibration_own = selected_record["calibration_own_scores"]
+calibration_foil = selected_record["calibration_foil_scores"]
 print(
     "frozen selection",
-    {"layer": selected_layer, "position_rule": POSITION_RULE, **threshold_record},
+    {
+        "layer": selected_layer,
+        "position_rule": POSITION_RULE,
+        "calibration_causal_separation": selected_record["causal_separation"],
+        **threshold_record,
+    },
 )
 
 verification_rows = []
@@ -424,6 +556,33 @@ torch.save(
     direction_path,
 )
 direction_sha = hashlib.sha256(direction_path.read_bytes()).hexdigest()
+clean_read_manifest = {
+    "schema_version": "symmetric-clean-read-manifest-v1",
+    "protocol_sha256": protocol_sha,
+    "model": {
+        "id": bundle.model_id,
+        "revision": bundle.revision,
+        "dtype": str(next(bundle.hf_model.parameters()).dtype),
+    },
+    "selection": {
+        "layer": selected_layer,
+        "position_rule": POSITION_RULE,
+        "written_threshold": written_threshold,
+    },
+    "counts": counts,
+    "rows": verification_rows,
+    "direction_cache": {
+        "path": str(direction_path),
+        "bytes": direction_path.stat().st_size,
+        "sha256": direction_sha,
+    },
+    "causal_interchange_outputs_included": False,
+}
+serialized_clean_manifest = json.dumps(clean_read_manifest, sort_keys=True)
+if '"C"' in serialized_clean_manifest or "metric_a_from_b" in serialized_clean_manifest:
+    raise RuntimeError("Sanitized cheap READ manifest contains causal output fields")
+save_json(CLEAN_MANIFEST_PATH, clean_read_manifest)
+clean_manifest_sha = hashlib.sha256(CLEAN_MANIFEST_PATH.read_bytes()).hexdigest()
 raw_artifact = {
     "schema_version": "symmetric-dataset-verification-v1",
     "protocol": protocol,
@@ -461,6 +620,12 @@ raw_artifact = {
         "bytes": direction_path.stat().st_size,
         "sha256": direction_sha,
     },
+    "clean_read_manifest": {
+        "path": str(CLEAN_MANIFEST_PATH),
+        "bytes": CLEAN_MANIFEST_PATH.stat().st_size,
+        "sha256": clean_manifest_sha,
+        "causal_interchange_outputs_included": False,
+    },
     "prompt_format_history": [
         {
             "status": "REJECTED_UNVERIFIED",
@@ -492,6 +657,20 @@ raw_artifact = {
             "counts": json.loads(FAILED_DASHBOARD_PATH.read_text())["counts"],
         },
     ],
+    "ground_truth_instrument_history": [
+        {
+            "status": "REJECTED_VOID_CAUSAL_INSTRUMENT",
+            "layer": 26,
+            "engine_abs_C_median": 0.002173954139019641,
+            "dashboard_abs_C_median": 0.0,
+            "reason": "WRITTEN-optimal layer left only one downstream block",
+            "artifact_path": str(FAILED_L26_CAUSAL_PATH),
+            "artifact_sha256": hashlib.sha256(
+                FAILED_L26_CAUSAL_PATH.read_bytes()
+            ).hexdigest(),
+            "cheap_read_values_existed": False,
+        }
+    ],
 }
 raw_path = RAW_DIR / "30_dataset_and_verification.json"
 save_json(raw_path, raw_artifact)
@@ -517,10 +696,23 @@ metrics["symmetric_causal_read_v6"] = {
             "sha256": raw_sha,
         },
         "direction_cache": raw_artifact["direction_cache"],
+        "clean_read_manifest": raw_artifact["clean_read_manifest"],
+        "ground_truth_instrument_history": raw_artifact[
+            "ground_truth_instrument_history"
+        ],
     },
 }
 save_json(METRICS_PATH, metrics)
-print(json.dumps({"raw_sha256": raw_sha, "direction_sha256": direction_sha}, indent=2))
+print(
+    json.dumps(
+        {
+            "raw_sha256": raw_sha,
+            "direction_sha256": direction_sha,
+            "clean_manifest_sha256": clean_manifest_sha,
+        },
+        indent=2,
+    )
+)
 
 del context_matrices, direction_bank, lens
 release_model(bundle)

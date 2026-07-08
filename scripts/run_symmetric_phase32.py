@@ -22,7 +22,7 @@ from src.model_utils import load_model, release_model, set_seed
 ROOT = Path("/home/jovyan/j-space-thoughts")
 RAW_DIR = ROOT / "data/raw/v6"
 METRICS_PATH = ROOT / "results/metrics.json"
-VERIFY_PATH = RAW_DIR / "30_dataset_and_verification.json"
+CLEAN_MANIFEST_PATH = RAW_DIR / "30_clean_read_manifest.json"
 DIRECTION_PATH = RAW_DIR / "30_selected_directions.pt"
 MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
 SEED = 1729
@@ -50,7 +50,8 @@ forbidden_found = sorted(
 if forbidden_found:
     raise RuntimeError(f"Anti-circularity import audit failed: {forbidden_found}")
 driver_source = Path(__file__).read_text()
-if "31_causal_ground_truth" in driver_source:
+forbidden_artifact_reference = "31_" + "causal_" + "ground_truth"
+if forbidden_artifact_reference in driver_source:
     raise RuntimeError("Cheap READ driver references the causal ground-truth artifact")
 anti_circularity_audit = {
     "status": "PASS",
@@ -62,7 +63,9 @@ anti_circularity_audit = {
 print("anti-circularity audit", json.dumps(anti_circularity_audit, indent=2))
 
 set_seed(SEED)
-verification = json.loads(VERIFY_PATH.read_text())
+verification = json.loads(CLEAN_MANIFEST_PATH.read_text())
+if verification.get("causal_interchange_outputs_included") is not False:
+    raise RuntimeError("Cheap READ manifest is not certified causal-output-free")
 direction_payload = torch.load(DIRECTION_PATH, map_location="cpu", weights_only=False)
 if direction_payload["protocol_sha256"] != verification["protocol_sha256"]:
     raise RuntimeError("Direction cache and verification protocol differ")
@@ -207,7 +210,9 @@ for index, pair in enumerate(verified_pairs):
 artifact = {
     "schema_version": "symmetric-cheap-read-v1",
     "protocol_sha256": verification["protocol_sha256"],
-    "upstream_verification_sha256": hashlib.sha256(VERIFY_PATH.read_bytes()).hexdigest(),
+    "upstream_clean_manifest_sha256": hashlib.sha256(
+        CLEAN_MANIFEST_PATH.read_bytes()
+    ).hexdigest(),
     "model": verification["model"],
     "selected_layer": selected_layer,
     "position_rule": position_rule,

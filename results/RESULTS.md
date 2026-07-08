@@ -72,6 +72,18 @@ where both tasks have exactly the same prefix state. The failed all-UNVERIFIED
 prompt-format attempt and the void-dashboard verification attempt are retained
 as hashed raw artifacts; no pair-specific result was used to choose the repair.
 
+The first full-residual pass at the WRITTEN-optimal L26 then showed a void causal
+instrument: engine median `|C|` was only 0.0022 because only one downstream block
+remained. This invalid ground-truth artifact is also retained. Before any cheap
+READ value existed, layer selection was corrected to use calibration groups only:
+for every L13--L26 candidate, enforce its calibration-derived WRITTEN threshold,
+compute symmetric full-residual engine/dashboard C on calibration pairs, and
+maximize `median(|C_engine|) - median(|C_dashboard|)`; ties prefer larger engine
+median `|C|`, stronger WRITTEN discrimination, then the lower layer. The selected
+layer and threshold are frozen before held-out C is recomputed. Cheap READ receives
+only a sanitized manifest containing the frozen selection, never calibration
+interchange outputs.
+
 ## New-run status
 
 PENDING — no symmetric-interchange or cheap-READ result has been computed yet.
