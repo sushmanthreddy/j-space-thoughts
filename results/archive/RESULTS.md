@@ -26,7 +26,7 @@ The labels used for ROC AUC are the constructed relevant-engine versus idle-cont
 
 No class produced a preregistered sharp directional-disagreement flag. Full-residual C is signed and unclipped.
 
-![Causal sanity](figures/f1_causal_sanity.png)
+![Causal sanity](../figures/f1_causal_sanity.png)
 
 ## Binary detection
 
@@ -39,7 +39,7 @@ No class produced a preregistered sharp directional-disagreement flag. Full-resi
 
 The answer-type-matched control shows that arithmetic output type is not the sole source of binary separation. No wall-clock benchmark was run, so READ is described precisely as gradient-only, donor-free, and intervention-output-free—not as an empirically timed speedup.
 
-![Binary AUC and baseline](figures/f2_binary_auc_and_baseline.png)
+![Binary AUC and baseline](../figures/f2_binary_auc_and_baseline.png)
 
 ## Graded-use stress test
 
@@ -47,7 +47,7 @@ Within the 77 engines, READ_IG has Spearman rho `-0.179110` with |C|, with group
 
 The pooled rho `0.707412` is descriptive of the engine/control class gap and is not evidence that READ_IG resolves graded causal strength inside engines.
 
-![Engine-only graded check](figures/f3_engine_only_graded_check.png)
+![Engine-only graded check](../figures/f3_engine_only_graded_check.png)
 
 ## Raw READ_IG distributions
 
@@ -59,11 +59,11 @@ The pooled rho `0.707412` is descriptive of the engine/control class gap and is 
 
 The two idle ranges overlap across `86.0%` of their union and both remain disjoint from engines on this roster.
 
-![Hard-control AUC](figures/f4_hard_dashboard_auc.png)
+![Hard-control AUC](../figures/f4_hard_dashboard_auc.png)
 
-![READ distributions](figures/f5_read_ig_distributions.png)
+![READ distributions](../figures/f5_read_ig_distributions.png)
 
-![Directional agreement](figures/f6_directional_agreement.png)
+![Directional agreement](../figures/f6_directional_agreement.png)
 
 ## Firewall and provenance
 

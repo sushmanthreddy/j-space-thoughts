@@ -9,12 +9,12 @@ this audit.
 
 The pre-gate pool is real and recoverable:
 
-- The tracked source [`data/specs/twohop_supplement.json`](../../data/specs/twohop_supplement.json)
+- The tracked source [`data/specs/twohop_supplement.json`](../../../data/specs/twohop_supplement.json)
   contains 236 validated reciprocal items. Its SHA-256 is
   `a27a79a28831e49c22b2f1a4981ab4308806b0ba2bd5a9b362dd4f5ab6274701`.
 - `build_symmetric_causal_candidates` pairs those items deterministically into
   118 candidate pairs in 33 dependency groups. The builder is in
-  [`src/datasets.py`](../../src/datasets.py#L286-L429).
+  [`src/datasets.py`](../../../src/datasets.py#L286-L429).
 - The frozen local record `artifacts/final/01_dataset.json` preserves all 118
   rows, including every evaluation rejection and its reasons. Its SHA-256 is
   `4d15652b0491aef16df59756d0d7cf0245957f591045574c26fe92dd1908fb8a`.
@@ -31,7 +31,7 @@ authoritative record of model-dependent gate outcomes.
 
 The final verification function computes a joint set of booleans rather than
 short-circuiting rows one gate at a time. In
-[`apply_symmetric_verification_gate`](../../src/datasets.py#L625-L705):
+[`apply_symmetric_verification_gate`](../../../src/datasets.py#L625-L705):
 
 1. `engine_verified` requires both engine targets to be clean top-1 and both
    own concepts to exceed the global WRITTEN threshold.

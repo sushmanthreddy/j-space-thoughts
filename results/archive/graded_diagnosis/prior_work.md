@@ -25,7 +25,7 @@ after the evidence tests are frozen at Gate 1.
 
 ### 1. Isolated v6 graded stress test
 
-[`experiments/05_prior_versions/v6_isolated/results/RESULTS_v6.md`](../../experiments/05_prior_versions/v6_isolated/results/RESULTS_v6.md)
+[`experiments/05_prior_versions/v6_isolated/results/RESULTS_v6.md`](../../../experiments/05_prior_versions/v6_isolated/results/RESULTS_v6.md)
 is the closest prior analysis. It reports:
 
 - 77 engines in 24 dependency groups;
@@ -43,7 +43,7 @@ It does not claim to know why the graded association fails.
 ### 2. Final integrated report and paper
 
 [`results/RESULTS.md`](../RESULTS.md), the root `README.md`, and
-[`paper/workshop_paper.md`](../../paper/workshop_paper.md) reproduce the same
+[`paper/workshop_paper.md`](../paper/workshop_paper.md) reproduce the same
 engine-only result and correctly reject the pooled engine/control correlation
 as graded evidence. The paper says range restriction *may* hide a relation and
 recommends a preregistered weak/medium/strong follow-up. It does not present
@@ -60,7 +60,7 @@ H2 but is not itself a graded-meter diagnosis.
 
 ### 4. Earlier failed instruments and READ definitions
 
-The research history in [`experiments/README.md`](../../experiments/README.md)
+The research history in [`experiments/README.md`](../../../experiments/README.md)
 and the paper records broken interventions, broad damaging edits, near-zero
 earlier attribution correlations, empty paths, and a backward intermediate
 classifier. These failures explain why the final instrument was narrowed and
