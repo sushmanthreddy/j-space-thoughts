@@ -754,6 +754,134 @@
     },
     "status": "COMPLETE"
   },
+  "check4": {
+    "artifact_hash_audit": {
+      "results/v6/raw/v6_1_within_engine.json": true,
+      "results/v6/raw/v6_2_hard_dashboard_analysis.json": true,
+      "results/v6/raw/v6_2_hard_dashboard_causal.json": true,
+      "results/v6/raw/v6_2_hard_dashboard_cheap.json": true,
+      "results/v6/raw/v6_2_hard_dashboard_manifest.json": true,
+      "results/v6/raw/v6_3_read_distributions.json": true
+    },
+    "decision": "ARTIFACT (partial)",
+    "decision_one_line": "ARTIFACT (partial): READ_IG survives the answer-type-matched control, but has no positive graded association within engines (rho=-0.179, 95% CI [-0.431, 0.126]); the perfect binary separation is not evidence of a graded causal-use meter.",
+    "decision_rule": {
+      "confirmed_requires_both": true,
+      "engine_only_ci_lower_above_zero": false,
+      "hard_control_auc_survives": true
+    },
+    "figure_audit": {
+      "results/v6/figures/F_v6_1_engine_only_read_vs_c.png": {
+        "bytes": 118380,
+        "exists": true,
+        "sha256": "80e80fa438e8387d442610d0c883b985e771642f555e4597a7077ba52928696b"
+      },
+      "results/v6/figures/F_v6_2_old_vs_hard_dashboard_auc.png": {
+        "bytes": 74158,
+        "exists": true,
+        "sha256": "6d2932c49a74fbcaf63fab6f3f66c1f98ac995513d9e7ef36c890288f01d368c"
+      },
+      "results/v6/figures/F_v6_3_read_ig_distributions.png": {
+        "bytes": 136480,
+        "exists": true,
+        "sha256": "146c2c8cda7e1c4e45d5fefe30ae0ac96390a83dc62fe75fa0a7a8f831467e16"
+      }
+    },
+    "firewall_audit": {
+      "cheap_causal_outputs_consumed": false,
+      "existing_causal_read_unchanged": true,
+      "existing_cheap_imports": [
+        "__future__",
+        "collections.abc",
+        "typing",
+        "torch",
+        "torch"
+      ],
+      "existing_cheap_read_unchanged": true,
+      "forbidden_imports": [],
+      "status": "PASS",
+      "v6_cheap_imports": [
+        "__future__",
+        "ast",
+        "gc",
+        "hashlib",
+        "json",
+        "pathlib",
+        "torch",
+        "src.cheap_read",
+        "src.model_utils"
+      ]
+    },
+    "isolation_audit": {
+      "all_baseline_relative_changes_are_additions": true,
+      "baseline_head": "eb9e44144de7d05d4a8e93f975d1af1351b0d87d",
+      "baseline_is_ancestor": true,
+      "changed_paths": [
+        "notebooks/v6_1_within_engine.ipynb",
+        "notebooks/v6_2_hard_dashboard.ipynb",
+        "notebooks/v6_3_distributions.ipynb",
+        "notebooks/v6_4_report.ipynb",
+        "results/v6/RESULTS_v6.md",
+        "results/v6/figures/F_v6_1_engine_only_read_vs_c.png",
+        "results/v6/figures/F_v6_2_old_vs_hard_dashboard_auc.png",
+        "results/v6/figures/F_v6_3_read_ig_distributions.png",
+        "results/v6/metrics_v6.json",
+        "results/v6/raw/v6_1_within_engine.json",
+        "results/v6/raw/v6_2_hard_dashboard_analysis.json",
+        "results/v6/raw/v6_2_hard_dashboard_causal.json",
+        "results/v6/raw/v6_2_hard_dashboard_cheap.json",
+        "results/v6/raw/v6_2_hard_dashboard_manifest.json",
+        "results/v6/raw/v6_3_read_distributions.json",
+        "scripts/run_distributions_v6.py",
+        "scripts/run_hard_dashboard_analysis_v6.py",
+        "scripts/run_hard_dashboard_causal_v6.py",
+        "scripts/run_hard_dashboard_cheap_v6.py",
+        "scripts/run_hard_dashboard_verify_v6.py",
+        "scripts/run_stress_report_v6.py",
+        "scripts/run_within_engine_v6.py",
+        "src/data_gen_v6.py",
+        "src/stress_v6.py"
+      ],
+      "existing_files_modified": false,
+      "git_status_before_final_commit": "## main...origin/main\n M results/v6/metrics_v6.json\n?? notebooks/v6_4_report.ipynb\n?? results/v6/RESULTS_v6.md\n?? scripts/run_stress_report_v6.py",
+      "status": "PASS",
+      "unexpected_non_v6_paths": []
+    },
+    "notebook_audit": {
+      "notebooks/v6_1_within_engine.ipynb": {
+        "errors": 0,
+        "executed": true,
+        "exists": true
+      },
+      "notebooks/v6_2_hard_dashboard.ipynb": {
+        "errors": 0,
+        "executed": true,
+        "exists": true
+      },
+      "notebooks/v6_3_distributions.ipynb": {
+        "errors": 0,
+        "executed": true,
+        "exists": true
+      },
+      "notebooks/v6_4_report.ipynb": {
+        "errors": 0,
+        "executed": true,
+        "exists": true
+      }
+    },
+    "prior_results_preserved": true,
+    "pytest_not_run": true,
+    "report": {
+      "bytes": 5118,
+      "path": "results/v6/RESULTS_v6.md",
+      "sha256": "0b81dc31654dac57e5be3783397b88fa8e48dadd2c66459c252d2bed10603390"
+    },
+    "ruff_not_run": true,
+    "status": "COMPLETE",
+    "test_suite_not_run": true
+  },
+  "decision": "ARTIFACT (partial)",
+  "decision_one_line": "ARTIFACT (partial): READ_IG survives the answer-type-matched control, but has no positive graded association within engines (rho=-0.179, 95% CI [-0.431, 0.126]); the perfect binary separation is not evidence of a graded causal-use meter.",
   "frozen_protocol": {
     "bootstrap_draws": 10000,
     "bootstrap_seed": 1729,
@@ -769,6 +897,11 @@
     "position_rule": "explicit_concept_token_in_shared_context",
     "source_layer": 16
   },
+  "preflight": {
+    "gpu_memory": "memory.total [MiB], memory.free [MiB]\n143771 MiB, 143072 MiB",
+    "hf_identity": "user=sushmanth orgs=devoworm-group,sushmanthreddy,OWG,syscv-community,context-course",
+    "hf_path": "/home/jovyan/.local/bin/hf"
+  },
   "schema_version": "read-stress-v6-isolated-v1",
-  "status": "CHECK_3_COMPLETE"
+  "status": "COMPLETE"
 }
