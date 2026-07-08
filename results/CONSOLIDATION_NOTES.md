@@ -69,15 +69,78 @@ it remains an archival source rather than a consolidation target.
   `results/selection_audit/VERDICT.md`, and
   `results/graded_diagnosis/RECOMMENDATION.md`.
 
-## Planned archive layout
+## Archive layout
 
-The workshop draft will move to
-`results/archive/paper/workshop_paper.md`; the old results report to
-`results/archive/RESULTS.md`; and the two detailed audit directories to
+The workshop draft and its six figure assets moved to
+`results/archive/paper/`; the old results report moved to
+`results/archive/RESULTS.md`; and the two detailed audit directories moved to
 `results/archive/selection_audit/` and
-`results/archive/graded_diagnosis/`. The relative grouping is retained so the
-records remain easy to inspect. The root `README.md` will be edited in place.
+`results/archive/graded_diagnosis/`. The selection audit's machine-readable
+`rejected_C.json` moved with its Markdown records. Relative links were repaired
+after the moves, and the root `README.md` was edited in place.
 
 ## Phase 5 consistency check
 
-Pending.
+**Outcome: PASS.** No untraceable scientific value remains; the
+untraceable-source TODO list is empty.
+
+### Number traceability
+
+Every displayed scientific number in the two synthesis documents was checked
+at its written precision against a populated source. The source groups are:
+
+- `RESEARCH_JOURNEY.md` historical values (`8` to `6`, observed `4`, `3/3`,
+  `alpha=2`, `1/8`, `r=0.062`, `0/8`, and `rho=-0.077`) come from the protected
+  `experiments/README.md` and
+  `experiments/03_read_attempts_failed/results/WRITEUP_v5.md`.
+- Final setup, causal medians, binary AUCs, the canonical within-engine graded
+  result, causal range, and pooled descriptive rho come verbatim from
+  `results/archive/RESULTS.md`. The six-decimal Markdown displays were retained
+  rather than replaced with differently represented raw floating-point values.
+- Graded diagnostic correlations, completeness statistics, and power/MDE
+  values come verbatim from
+  `results/archive/graded_diagnosis/analysis.md`, with interpretation checked
+  against `results/archive/graded_diagnosis/ranking.md` and
+  `results/archive/graded_diagnosis/RECOMMENDATION.md`.
+- Selection counts and Finding A's scope come verbatim from
+  `results/archive/selection_audit/gate_flow.md` and
+  `results/archive/selection_audit/VERDICT.md`.
+
+Two potential fabrication traps were checked explicitly. The token location is
+reported as the explicit concept token rather than an invented fixed integer
+position. The pooled rho has no populated confidence interval, so none is
+reported; the canonical within-engine interval is not reused for it. The power
+statement is labeled as the conservative 24-independent-group approximation,
+not the unestimated power of the unequal clustered design.
+
+### Archive integrity
+
+The numerical token stream of each of the ten moved Markdown records was
+compared with its source at commit
+`af44ce35452a32b07326ccb22d867c4d0d4d2418`; all ten comparisons passed.
+Scientific prose and values were preserved. Three archived records received
+relative-link-only repairs necessitated by their deeper paths; the workshop
+figures moved with the draft, and the selection JSON moved with its audit.
+
+### Protected-tree integrity
+
+A sorted SHA-256 manifest was captured before the consolidation for every file
+under `experiments/` and compared with a fresh manifest afterward. All `152/152`
+files are byte-identical. Both manifests hash to
+`170905b0f6d9d617228b2c138956b79c8b33fe62b253ede2932aa79442538f84`.
+`git diff` from branch base
+`b876a1df814ec1d713890c54c7ffdd5d2fd99641` also reports no change under
+`experiments/`.
+
+### Links and deliverables
+
+A local-target check over `README.md`, both synthesis documents, this file, and
+all archived Markdown found no broken relative link. The final layout contains
+exactly the two requested new synthesis documents, `RESEARCH_JOURNEY.md` and
+root `RESULTS.md`, plus this required working/audit record. The prior detailed
+research Markdown is preserved under `results/archive/`, and `data/README.md`
+remains unchanged as operational documentation.
+
+No test suite, pytest, Ruff, model run, causal intervention, READ computation,
+or result recomputation was performed, as required for this writing and
+archival task.
