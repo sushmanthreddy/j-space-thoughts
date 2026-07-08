@@ -141,17 +141,96 @@ the project does not claim a measured speedup.
 
 ## What the experiment found
 
-The binary question worked in the frozen setting. `READ_IG` separated 77
-verified engines in 24 dependency groups from both the original dashboards and
-the answer-type-matched dashboards. Both held-out comparisons reached ROC AUC
-`1.000000` with grouped interval `[1.000000, 1.000000]`.
+The result is easiest to understand as five questions answered in order. Each
+plot earns one inference; none should be stretched into the next one.
 
-The stronger graded claim failed. Within the already-relevant engines,
-`READ_IG` had Spearman `rho=-0.179110` with normalized full-residual `|C|`, with
-grouped interval `[-0.431377, 0.126014]`. A later diagnosis found no formula,
-join, layer, token, sign, or padding bug that rescues that result. READ follows
-the scale and endpoint of its own direction-defined path; normalized
-full-residual `C` measures a different, compressed quantity.
+### 1. Did the intervention establish a real engine/dashboard difference?
+
+![Causal intervention sanity check: engines show strong recovery while visible-but-idle dashboards remain near zero](results/figures/f1_causal_sanity.png)
+
+**What to look at.** Swapping the complete concept-token residual state changes
+the engine answer strongly: median signed `C` is `0.912714`. The same operation
+barely moves the original dashboard answer: median signed `C` is `-0.002043`.
+The engine/dashboard labels are constructed by the tasks and then supported by
+this causal check; they are not created by thresholding `C`.
+
+**What this earns.** The matched prompts behave like used versus idle concepts
+under the declared L16 full-residual intervention.
+
+**What it does not earn.** Full-residual interchange does not prove that the
+J-Lens direction is the unique causal mechanism. The swapped state can contain
+other correlated information.
+
+### 2. Does the cheap score visibly separate the two classes?
+
+![Raw READ-IG distributions: engines occupy a higher band than both idle-control families](results/figures/f5_read_ig_distributions.png)
+
+**What to look at.** The vertical axis is logarithmic. The lowest engine score
+is `0.034970`; the highest original-idle score is `0.023411`, and the highest
+answer-matched-idle score is `0.021032`. No idle point overlaps the engine band
+on this frozen roster.
+
+**What this earns.** The successful AUC is visible in the raw observations; it
+is not an artifact of one favorable threshold or a hidden transformation.
+
+**What it does not earn.** The gap does not supply a deployment threshold. A
+new model, concept family, or prompt distribution could move either band, and
+deployment prevalence would change the score's operational predictive value.
+
+### 3. Is integrated READ doing more than a local gradient or static wiring score?
+
+![Held-out binary AUC comparison for READ-IG, READ-local, and static capacity](results/figures/f2_binary_auc_and_baseline.png)
+
+**What to look at.** `READ_IG` reaches held-out ROC AUC `1.000000` with grouped
+interval `[1.000000, 1.000000]`. `READ_local` reaches `0.914825`
+`[0.863661, 0.967161]`; the behavior-independent static-capacity control is
+`0.500000` `[0.500000, 0.500000]`.
+
+**What this earns.** Static sensitivity to a concept direction is not enough to
+explain the result. The integrated path achieves cleaner binary ranking than
+the local score on this roster.
+
+**What it does not earn.** The comparison is statistical, not a runtime
+benchmark. `READ_IG` is donor-free, but no measured speed or cost advantage is
+claimed.
+
+### 4. Is the result only an arithmetic-versus-city shortcut?
+
+![READ-IG AUC remains perfect under the harder answer-type-matched idle control](results/figures/f4_hard_dashboard_auc.png)
+
+**What to look at.** Engine discrimination is `1.000000` against the original
+arithmetic dashboards and remains `1.000000` against dashboards with the same
+semantic answer type as the engines.
+
+**What this earns.** Arithmetic answer type is not the sole explanation for
+the binary separation.
+
+**What it does not earn.** One harder negative set cannot rule out every
+lexical, syntactic, difficulty, or distributional shortcut. More adversarial
+controls remain useful future work.
+
+### 5. Does READ measure degree of causal use within engines?
+
+![Engine-only graded check: READ-IG does not positively rank normalized causal recovery](results/figures/f3_engine_only_graded_check.png)
+
+**What to look at.** Within the 77 already-relevant engines, `READ_IG` has
+Spearman `rho=-0.179110` with normalized full-residual `|C|`; the grouped
+interval is `[-0.431377, 0.126014]`. The point estimate is negative and the
+interval contains zero.
+
+**What this earns.** No positive graded-use evidence. The plot is the reason
+the project reports a binary detector rather than a causal-strength ruler.
+
+**What it does not earn.** It does not prove that every future graded estimator
+is impossible. The present roster is strong-only, and a separate diagnosis
+found limited prospective sensitivity under a conservative power approximation
+and poor numerical completeness. Those limitations motivate a new benchmark;
+they do not rescue this estimator/target pairing.
+
+A later audit found no formula, join, layer, token, sign, or padding bug that
+rescues the graded result. READ follows the scale and endpoint of its own
+direction-defined path; normalized full-residual `C` measures a different,
+compressed quantity.
 
 That leaves a clear boundary:
 
@@ -164,11 +243,6 @@ That leaves a clear boundary:
 | Did later verification gates remove weak visible engines? | **No, within the L16-visible population** | Every visible evaluation candidate passed the non-WRITTEN conditions. |
 | Does the WRITTEN threshold itself exclude a weak-but-real causal tail? | **Open** | The below-threshold candidates have no causal measurement in this study. |
 | Does the result generalize to other models, layers, tasks, or implicit concepts? | **Open** | No transfer claim was established. |
-
-![Held-out binary AUC and baselines](results/figures/f2_binary_auc_and_baseline.png)
-
-The figure shows ranking on this roster, not universal accuracy, a calibrated
-deployment threshold, or a known future false-positive rate.
 
 ## Why the negative result matters
 
