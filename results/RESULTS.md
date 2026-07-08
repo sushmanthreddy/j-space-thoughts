@@ -144,6 +144,19 @@ engine/dashboard tasks.
 
 **GO: READ_IG predicts causal use on held-out Qwen2.5-7B concepts (AUC=1.000, 95% CI [1.000, 1.000]).**
 
+
+## GO-only signed localization
+
+Phase 4 ran on three post-GO exploratory, directionally stable engine cases.
+Every strictly downstream attention and MLP output was restored individually to
+its clean value to obtain signed `READ_k`. The proposed top-8
+circuits were then tested by zero-ablating every downstream component outside
+the circuit in both clean and edited runs. Faithfulness fractions were
+`[0.3649, 0.2387, 0.3623]`. The compact top-8 circuits therefore fail a strong
+faithfulness standard; no faithful compact component-circuit claim is made.
+
+![F5](figures/f5_signed_mediation_faithfulness.png)
+
 ---
 
 # Prior READ Go/No-Go validation (archived, superseded by the run above)

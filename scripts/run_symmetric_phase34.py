@@ -225,7 +225,9 @@ Every strictly downstream attention and MLP output was restored individually to
 its clean value to obtain signed `READ_k`. The proposed top-{circuit_size}
 circuits were then tested by zero-ablating every downstream component outside
 the circuit in both clean and edited runs. Faithfulness fractions were
-`{[round(value, 4) for value in faithfulness_values]}`.
+`{[round(value, 4) for value in faithfulness_values]}`. The compact top-{circuit_size}
+circuits therefore fail a strong faithfulness standard; no faithful compact
+component-circuit claim is made.
 
 ![F5](figures/{f5_path.name})
 """
