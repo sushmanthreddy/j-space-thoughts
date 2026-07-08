@@ -1,4 +1,68 @@
-# READ Go/No-Go validation
+# Symmetric causal READ — preregistration (2026-07-08)
+
+## Preflight
+
+- `hf`: `/home/jovyan/.local/bin/hf`; authenticated as `sushmanth`.
+- GPU: 143771 MiB total, 143072 MiB free.
+- Hugging Face cache filesystem: 100 GiB total, 64 GiB used, 37 GiB free.
+- Model is pinned to `Qwen/Qwen2.5-7B-Instruct` revision
+  `a09a35458c702b33eeacc393d103063234e8bc28` in bfloat16.
+- The required 20-prompt HF/J-Lens-wrapper agreement gate is KL < 1e-3.
+
+## Pre-registered trust bar
+
+This section was written before any new matched-interchange or gradient outcome
+was computed.
+
+- Seed: 1729. Candidate data are the 118 deterministic one-to-one reciprocal
+  pairs in `data/specs/twohop_supplement.json`; every pair has two natural
+  prompts and two different single-token answers. The shuffled first 24 pairs
+  are calibration-only and are excluded from the trust check. All remaining
+  pairs are held-out evaluation concepts.
+- Position is fixed to the final prompt token. On calibration-only clean runs,
+  select one J-Lens source layer from L13--L27 by maximum own-versus-matched-foil
+  discrimination rate, then median margin, then lower layer. Select the WRITTEN
+  threshold by maximum balanced accuracy between calibration own-concept and
+  matched-foil scores, restricted to thresholds with own-concept recall >=0.80;
+  ties prefer higher recall and then the lower threshold.
+- A pair enters evaluation only when both engine prompts have the declared
+  target as clean top-1 and both own-concept scores clear the frozen WRITTEN
+  threshold. Its task-matched dashboard control additionally requires top-1
+  arithmetic answers and the same WRITTEN check in both same-context controls.
+  Failures remain `UNVERIFIED` with reasons and are never relabelled.
+- Primary causal truth is one-position, one-layer full-residual interchange in
+  both directions. Engine `T = M_A - M_B`, with
+  `M = logit(answer_A) - logit(answer_B)`. Signed directional responses and
+  `C = (R_A<-B + R_B<-A)/2` are not clipped. Dashboard controls use
+  `M_dash = logit(4) - logit(5)` and the matched engine `T` as the fixed response
+  scale because both dashboard prompts correctly retain answer 4. A separately
+  labelled two-direction J-Lens two-concept-subspace interchange is diagnostic.
+- Primary `READ_IG` is the mean absolute two-direction, 16-midpoint integrated
+  gradient of the task metric. Its direction-defined path rotates the clean
+  own-concept amount into the matched concept:
+  `Delta_A = (h_A^T v_A)(v_B-v_A)` and symmetrically for B. It uses only clean
+  activations, directions, forward passes, and gradients. It cannot read the
+  causal artifact or import/call interchange code. `READ_local` is the mean of
+  `|(h^T v)(grad_h M . v)|` over the two clean directions. Static MLP gain is a
+  labelled known-broken capacity baseline and cannot trigger GO.
+- Evaluation is pooled out-of-fold over five deterministic concept-pair folds;
+  no estimator, sign, layer, threshold, or score transformation is selected on
+  evaluation concepts. ROC bootstrap resamples concept pairs (keeping each
+  engine/dashboard pair together), 10,000 draws, seed 1729.
+- **GO requires primary READ_IG held-out ROC AUC >= 0.70 and the pair-bootstrap
+  95% CI lower bound > 0.50.** Otherwise the decision is NO-GO. `READ_local`,
+  the capacity baseline, fold AUCs, and Spearman rho with `|C|` are secondary
+  and cannot rescue a failed primary.
+- Sharp directional disagreement is pre-flagged at
+  `|R_A<-B - R_B<-A| > 0.50`. Negative and >1 responses are retained.
+
+## New-run status
+
+PENDING — no symmetric-interchange or cheap-READ result has been computed yet.
+
+---
+
+# Prior READ Go/No-Go validation (archived, superseded by the run above)
 
 ## DECISION
 
