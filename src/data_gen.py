@@ -382,3 +382,282 @@ def deterministic_subset(items: list[dict], n: int, *, seed: int = 1729) -> list
     rng = random.Random(seed)
     selected_indices = sorted(rng.sample(range(len(items)), n))
     return [items[index] for index in selected_indices]
+
+
+SYMMETRIC_READ_SEED = 1729
+SYMMETRIC_CALIBRATION_MIN_PAIRS = 24
+SYMMETRIC_N_FOLDS = 5
+
+_SYMMETRIC_TASK_TEMPLATES = {
+    "atomic-number-element-symbol": {
+        "clue_prefix": "The chemical symbol of ",
+        "question": "What is that element's chemical symbol?",
+    },
+    "us-city-state-capital": {
+        "clue_prefix": "The capital of ",
+        "question": "What is that US state's capital?",
+    },
+    "city-country-capital": {
+        "clue_prefix": "The capital of ",
+        "question": "What is that country's capital?",
+    },
+}
+
+
+def _concept_answer_key(item: dict) -> tuple[str, str]:
+    return (str(item["intermediate"]).casefold(), str(item["answer"]).casefold())
+
+
+def _reciprocal_group_key(item: dict) -> tuple[str, tuple[str, str], tuple[str, str]]:
+    source = _concept_answer_key(item)
+    target = (str(item["swap_to"]).casefold(), str(item["swap_answer"]).casefold())
+    low, high = sorted((source, target))
+    return (str(item["category"]), low, high)
+
+
+def _symmetric_prompt(
+    category: str,
+    concept: str,
+    source_prompt: str,
+    *,
+    dashboard: bool,
+) -> tuple[str, str]:
+    try:
+        template = _SYMMETRIC_TASK_TEMPLATES[category]
+    except KeyError as error:
+        raise ValueError(f"No symmetric task template for category {category!r}") from error
+    clue = " ".join(str(source_prompt).split())
+    if clue.startswith("Fact: "):
+        clue = clue[len("Fact: ") :]
+    if clue.endswith(" is"):
+        clue = clue[:-3]
+    prefix = template["clue_prefix"]
+    if not clue.startswith(prefix):
+        raise ValueError(
+            f"Source prompt does not match {category!r} clue prefix {prefix!r}: {clue!r}"
+        )
+    description = clue[len(prefix) :]
+    # Keep the concept latent, as in the original J-Lens prompt: the natural
+    # description evokes it, while the WRITTEN gate decides whether it is
+    # actually represented. ``concept`` remains an explicit function argument
+    # so the caller cannot accidentally pair the clue with the wrong label.
+    if not concept.strip():
+        raise ValueError("Concept label must be non-empty")
+    context = f"Consider {description}."
+    question = "What is 2 + 2?" if dashboard else template["question"]
+    return context, f"Context: {context} Question: {question} Answer:"
+
+
+def build_symmetric_causal_candidates(
+    supplement_path: str | Path = DEFAULT_TWOHOP_SUPPLEMENT,
+    *,
+    seed: int = SYMMETRIC_READ_SEED,
+    calibration_min_pairs: int = SYMMETRIC_CALIBRATION_MIN_PAIRS,
+    n_folds: int = SYMMETRIC_N_FOLDS,
+) -> dict[str, Any]:
+    """Build reciprocal matched prompts and a leakage-safe deterministic split.
+
+    Every source row in the supplement has a reciprocal row. Some unordered
+    concept pairs have several independently-authored natural contexts; those
+    contexts remain separate prompt pairs but share one dependency group. Whole
+    dependency groups, never individual contexts, are assigned to calibration
+    or to one held-out fold.
+    """
+
+    if calibration_min_pairs < 1 or n_folds < 2:
+        raise ValueError("calibration_min_pairs must be positive and n_folds >= 2")
+    payload = load_twohop_supplement(supplement_path)
+    grouped: dict[
+        tuple[str, tuple[str, str], tuple[str, str]], dict[int, list[dict]]
+    ] = {}
+    for item in payload["items"]:
+        key = _reciprocal_group_key(item)
+        side = 0 if _concept_answer_key(item) == key[1] else 1
+        grouped.setdefault(key, {0: [], 1: []})[side].append(item)
+
+    pairs: list[dict[str, Any]] = []
+    group_counts: dict[str, int] = {}
+    for key in sorted(grouped):
+        category, low, high = key
+        left = sorted(grouped[key][0], key=lambda row: str(row["name"]))
+        right = sorted(grouped[key][1], key=lambda row: str(row["name"]))
+        if not left or len(left) != len(right):
+            raise ValueError(
+                f"Reciprocal group {key!r} is unbalanced: {len(left)} versus {len(right)}"
+            )
+        concept_a, answer_a = left[0]["intermediate"], left[0]["answer"]
+        concept_b, answer_b = right[0]["intermediate"], right[0]["answer"]
+        dependency_group = (
+            f"{category}:{str(concept_a).casefold()}<->{str(concept_b).casefold()}"
+        )
+        group_counts[dependency_group] = len(left)
+        for slot, (row_a, row_b) in enumerate(zip(left, right, strict=True)):
+            if (
+                str(row_a["intermediate"]).casefold() != str(concept_a).casefold()
+                or str(row_b["intermediate"]).casefold() != str(concept_b).casefold()
+                or str(row_a["answer"]).casefold() != str(answer_a).casefold()
+                or str(row_b["answer"]).casefold() != str(answer_b).casefold()
+            ):
+                raise ValueError(f"Inconsistent reciprocal group {dependency_group!r}")
+            context_a, engine_a = _symmetric_prompt(
+                category,
+                str(concept_a),
+                str(row_a["prompt"]),
+                dashboard=False,
+            )
+            context_b, engine_b = _symmetric_prompt(
+                category,
+                str(concept_b),
+                str(row_b["prompt"]),
+                dashboard=False,
+            )
+            dash_context_a, dashboard_a = _symmetric_prompt(
+                category,
+                str(concept_a),
+                str(row_a["prompt"]),
+                dashboard=True,
+            )
+            dash_context_b, dashboard_b = _symmetric_prompt(
+                category,
+                str(concept_b),
+                str(row_b["prompt"]),
+                dashboard=True,
+            )
+            if context_a != dash_context_a or context_b != dash_context_b:
+                raise AssertionError("Engine/dashboard contexts must be byte-identical")
+            pairs.append(
+                {
+                    "pair_id": f"symmetric-{len(pairs):03d}",
+                    "dependency_group": dependency_group,
+                    "context_slot": slot,
+                    "category": category,
+                    "concept_a": str(concept_a),
+                    "concept_b": str(concept_b),
+                    "answer_a": str(answer_a),
+                    "answer_b": str(answer_b),
+                    "context_a": context_a,
+                    "context_b": context_b,
+                    "engine_prompt_a": engine_a,
+                    "engine_prompt_b": engine_b,
+                    "dashboard_prompt_a": dashboard_a,
+                    "dashboard_prompt_b": dashboard_b,
+                    "dashboard_answer": "4",
+                    "dashboard_distractor": "5",
+                    "source_row_a": str(row_a["name"]),
+                    "source_row_b": str(row_b["name"]),
+                    "source_prompt_a": str(row_a["prompt"]),
+                    "source_prompt_b": str(row_b["prompt"]),
+                }
+            )
+
+    if len(pairs) < 100:
+        raise ValueError(f"Symmetric candidate pool has only {len(pairs)} prompt pairs")
+    if len({(pair["engine_prompt_a"], pair["engine_prompt_b"]) for pair in pairs}) != len(
+        pairs
+    ):
+        raise ValueError("Symmetric engine prompt pairs are not unique")
+    if len(
+        {(pair["dashboard_prompt_a"], pair["dashboard_prompt_b"]) for pair in pairs}
+    ) != len(pairs):
+        raise ValueError("Symmetric dashboard prompt pairs are not unique")
+    group_order = sorted(group_counts)
+    rng = random.Random(seed)
+    rng.shuffle(group_order)
+    calibration_groups: list[str] = []
+    calibration_count = 0
+    for group in group_order:
+        if calibration_count >= calibration_min_pairs:
+            break
+        calibration_groups.append(group)
+        calibration_count += group_counts[group]
+    calibration_set = set(calibration_groups)
+    evaluation_groups = [group for group in group_order if group not in calibration_set]
+    if len(evaluation_groups) < n_folds:
+        raise ValueError("Too few held-out dependency groups for the requested folds")
+    fold_by_group = {
+        group: index % n_folds for index, group in enumerate(evaluation_groups)
+    }
+    for pair in pairs:
+        group = pair["dependency_group"]
+        pair["split"] = "calibration" if group in calibration_set else "evaluation"
+        pair["fold"] = None if group in calibration_set else fold_by_group[group]
+
+    return {
+        "schema_version": "symmetric-causal-read-candidates-v1",
+        "seed": seed,
+        "source_schema_version": payload["schema_version"],
+        "source": _supplement_source_id(Path(supplement_path)),
+        "n_candidates": len(pairs),
+        "n_dependency_groups": len(group_counts),
+        "calibration_min_pairs": calibration_min_pairs,
+        "n_calibration_pairs": sum(
+            pair["split"] == "calibration" for pair in pairs
+        ),
+        "n_evaluation_pairs": sum(pair["split"] == "evaluation" for pair in pairs),
+        "calibration_groups": calibration_groups,
+        "evaluation_groups": evaluation_groups,
+        "group_counts": group_counts,
+        "n_folds": n_folds,
+        "fold_by_group": fold_by_group,
+        "pairs": pairs,
+    }
+
+
+def tokenize_symmetric_candidate(tokenizer: Any, pair: dict) -> dict:
+    """Attach exact concept/answer token IDs to one symmetric prompt pair."""
+
+    concept_a_id, concept_a_surface = concept_token_id(tokenizer, pair["concept_a"])
+    concept_b_id, concept_b_surface = concept_token_id(tokenizer, pair["concept_b"])
+    answer_a_id, answer_a_surface = continuation_token_id(
+        tokenizer, pair["engine_prompt_a"], pair["answer_a"]
+    )
+    answer_b_id, answer_b_surface = continuation_token_id(
+        tokenizer, pair["engine_prompt_b"], pair["answer_b"]
+    )
+    dashboard_id_a, dashboard_surface_a = continuation_token_id(
+        tokenizer, pair["dashboard_prompt_a"], pair["dashboard_answer"]
+    )
+    dashboard_id_b, dashboard_surface_b = continuation_token_id(
+        tokenizer, pair["dashboard_prompt_b"], pair["dashboard_answer"]
+    )
+    distractor_id_a, distractor_surface_a = continuation_token_id(
+        tokenizer, pair["dashboard_prompt_a"], pair["dashboard_distractor"]
+    )
+    distractor_id_b, distractor_surface_b = continuation_token_id(
+        tokenizer, pair["dashboard_prompt_b"], pair["dashboard_distractor"]
+    )
+    if concept_a_id == concept_b_id or answer_a_id == answer_b_id:
+        raise ValueError(f"Collapsed concept or answer tokens for {pair['pair_id']}")
+    if dashboard_id_a != dashboard_id_b or distractor_id_a != distractor_id_b:
+        raise ValueError(f"Dashboard tokenization differs across {pair['pair_id']}")
+    if dashboard_id_a == distractor_id_a:
+        raise ValueError(f"Dashboard target and distractor collapse for {pair['pair_id']}")
+    engine_length_a = len(tokenizer.encode(pair["engine_prompt_a"], add_special_tokens=False))
+    engine_length_b = len(tokenizer.encode(pair["engine_prompt_b"], add_special_tokens=False))
+    dashboard_length_a = len(
+        tokenizer.encode(pair["dashboard_prompt_a"], add_special_tokens=False)
+    )
+    dashboard_length_b = len(
+        tokenizer.encode(pair["dashboard_prompt_b"], add_special_tokens=False)
+    )
+    return {
+        **pair,
+        "concept_a_token_id": concept_a_id,
+        "concept_b_token_id": concept_b_id,
+        "concept_a_surface": concept_a_surface,
+        "concept_b_surface": concept_b_surface,
+        "answer_a_token_id": answer_a_id,
+        "answer_b_token_id": answer_b_id,
+        "answer_a_surface": answer_a_surface,
+        "answer_b_surface": answer_b_surface,
+        "dashboard_token_id": dashboard_id_a,
+        "dashboard_surface_a": dashboard_surface_a,
+        "dashboard_surface_b": dashboard_surface_b,
+        "dashboard_distractor_token_id": distractor_id_a,
+        "dashboard_distractor_surface_a": distractor_surface_a,
+        "dashboard_distractor_surface_b": distractor_surface_b,
+        "engine_n_tokens_a": engine_length_a,
+        "engine_n_tokens_b": engine_length_b,
+        "dashboard_n_tokens_a": dashboard_length_a,
+        "dashboard_n_tokens_b": dashboard_length_b,
+    }

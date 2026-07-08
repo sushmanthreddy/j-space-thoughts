@@ -53,7 +53,7 @@ was computed.
   threshold, or score transformation is selected on evaluation concepts. ROC
   bootstrap resamples dependency groups, retaining every repeated context and
   its engine/dashboard pair together, 10,000 draws, seed 1729.
-- **GO requires primary READ_IG held-out ROC AUC >= 0.70 and the pair-bootstrap
+- **GO requires primary READ_IG held-out ROC AUC >= 0.70 and the group-bootstrap
   95% CI lower bound > 0.50.** Otherwise the decision is NO-GO. `READ_local`,
   the capacity baseline, fold AUCs, and Spearman rho with `|C|` are secondary
   and cannot rescue a failed primary.
