@@ -93,6 +93,187 @@
       "status": "NOT_RUN_NO_PREREGISTERED_OR_NATURAL_SPLIT"
     }
   },
+  "check2": {
+    "anti_circularity_audit": {
+      "causal_artifact_read": false,
+      "causal_outputs_consumed": false,
+      "cheap_read_sha256": "ed814fbaec4af1d6618a0f80e0f61fae7cc9597f0747766bcc166834047b32bb",
+      "estimator_logic": "imported unchanged from src/cheap_read.py",
+      "forbidden_imports_found": [],
+      "forbidden_manifest_keys_found": [],
+      "imports_by_file": {
+        "scripts/run_hard_dashboard_cheap_v6.py": [
+          "__future__",
+          "ast",
+          "gc",
+          "hashlib",
+          "json",
+          "pathlib",
+          "torch",
+          "src.cheap_read",
+          "src.model_utils"
+        ],
+        "src/cheap_read.py": [
+          "__future__",
+          "collections.abc",
+          "typing",
+          "torch",
+          "torch"
+        ]
+      },
+      "status": "PASS"
+    },
+    "artifacts": {
+      "analysis": {
+        "path": "results/v6/raw/v6_2_hard_dashboard_analysis.json",
+        "sha256": "e7dac7a5d2a325e66ce02a1c35e327de80c7d8f3c13bf425b2aed212e72f85f1"
+      },
+      "causal": {
+        "path": "results/v6/raw/v6_2_hard_dashboard_causal.json",
+        "sha256": "6959517dcc2a196e9ab54d3f62fb4cdb25f206a52b2dd53f8d2badf23815c8bc"
+      },
+      "cheap": {
+        "path": "results/v6/raw/v6_2_hard_dashboard_cheap.json",
+        "sha256": "bd8c8439d5bdd60073c9ca0d4de7491a450a1593721cb29db5fd9f7185a1cabe"
+      },
+      "manifest": {
+        "path": "results/v6/raw/v6_2_hard_dashboard_manifest.json",
+        "sha256": "93e352df05a4e0b096f5f022c98939858b80692ac8e57dddccb48b92a6754f0c"
+      }
+    },
+    "category_auc_diagnostic": {
+      "atomic-number-element-symbol": {
+        "auc": 1.0,
+        "diagnostic_only": true,
+        "n_dependency_groups": 8,
+        "n_pairs": 8
+      },
+      "city-country-capital": {
+        "auc": 1.0,
+        "diagnostic_only": true,
+        "n_dependency_groups": 10,
+        "n_pairs": 41
+      },
+      "us-city-state-capital": {
+        "auc": 1.0,
+        "diagnostic_only": true,
+        "n_dependency_groups": 6,
+        "n_pairs": 28
+      }
+    },
+    "causal_sanity": {
+      "engine_C_median": 0.9127144298688193,
+      "engine_abs_C_median": 0.9127144298688193,
+      "engine_large_gate": true,
+      "hard_dashboard_C_max": 0.017278617710583154,
+      "hard_dashboard_C_median": 0.0012345679012345677,
+      "hard_dashboard_C_min": -0.03321256038647343,
+      "hard_dashboard_abs_C_median": 0.00646551724137931,
+      "hard_dashboard_near_zero_gate": true,
+      "hard_dashboard_sharp_directional_disagreements": 0,
+      "n_pairs": 77,
+      "status": "PASS"
+    },
+    "design": {
+      "concept_irrelevance_by_construction": true,
+      "control_kind": "fixed calibration-anchor fact with matched semantic relation and answer class",
+      "exact_source_context_prefix_required": true,
+      "numeric_example_not_applicable": "The frozen engines output element symbols or capital-city names, never numbers; forcing numbers would preserve the answer-type mismatch under test.",
+      "template_selection_used_heldout_outcomes": false,
+      "templates": {
+        "atomic-number-element-symbol": {
+          "anchor_dependency_group": "atomic-number-element-symbol:platinum<->tin",
+          "answer_type": "chemical element symbol",
+          "distractor": "Sn",
+          "distractor_surface": " Sn",
+          "irrelevance": "The source element cannot determine platinum's symbol.",
+          "relation": "element-to-chemical-symbol",
+          "suffix": " For comparison, the chemical symbol of platinum is",
+          "target": "Pt",
+          "target_surface": " Pt",
+          "template_id": "fixed-calibration-platinum-symbol"
+        },
+        "city-country-capital": {
+          "anchor_dependency_group": "city-country-capital:netherlands<->peru",
+          "answer_type": "national capital city",
+          "distractor": "Lima",
+          "distractor_surface": " Lima",
+          "irrelevance": "The source country cannot determine the Netherlands' capital.",
+          "relation": "country-to-national-capital",
+          "suffix": " For comparison, the capital of the Netherlands is",
+          "target": "Amsterdam",
+          "target_surface": " Amsterdam",
+          "template_id": "fixed-calibration-netherlands-capital"
+        },
+        "us-city-state-capital": {
+          "anchor_dependency_group": "us-city-state-capital:alabama<->georgia",
+          "answer_type": "US state capital city",
+          "distractor": "Atlanta",
+          "distractor_surface": " Atlanta",
+          "irrelevance": "The source state cannot determine Alabama's capital.",
+          "relation": "US-state-to-state-capital",
+          "suffix": " For comparison, the capital of the US state of Alabama is",
+          "target": "Montgomery",
+          "target_surface": " Montgomery",
+          "template_id": "fixed-calibration-alabama-capital"
+        }
+      }
+    },
+    "figure": "results/v6/figures/F_v6_2_old_vs_hard_dashboard_auc.png",
+    "hard_auc_survives_at_0_80": true,
+    "hard_dashboard_auc": {
+      "bootstrap_draws": 10000,
+      "bootstrap_seed": 1729,
+      "bootstrap_unit": "dependency_group",
+      "ci95_high": 1.0,
+      "ci95_low": 0.9999999999999999,
+      "ci_high": 1.0,
+      "ci_low": 0.9999999999999999,
+      "confidence": 0.95,
+      "estimate": 1.0,
+      "fold_auc": {
+        "0": 1.0,
+        "1": 1.0,
+        "2": 1.0,
+        "3": 1.0,
+        "4": 1.0
+      },
+      "group_key": "dependency_group",
+      "label_key": "label",
+      "n_dependency_groups": 24,
+      "n_negative": 77,
+      "n_positive": 77,
+      "n_rows": 154,
+      "score_key": "READ_IG",
+      "statistic": "roc_auc",
+      "undefined_bootstrap_draws": 0,
+      "valid_bootstrap_draws": 10000
+    },
+    "interpretation": "HARD_CONTROL_SEPARATION_SURVIVES",
+    "old_dashboard_auc": {
+      "ci95_high": 1.0,
+      "ci95_low": 0.9999999999999999,
+      "estimate": 1.0,
+      "n_pairs": 77
+    },
+    "source_immutability": {
+      "causal_read_baseline_sha256": "97b2aeaeb45e0c868678dbe58337f4922c7a4d9d35a30d0806ac1eb679c8c2cc",
+      "causal_read_current_sha256": "97b2aeaeb45e0c868678dbe58337f4922c7a4d9d35a30d0806ac1eb679c8c2cc",
+      "causal_read_unchanged": true,
+      "cheap_read_baseline_sha256": "ed814fbaec4af1d6618a0f80e0f61fae7cc9597f0747766bcc166834047b32bb",
+      "cheap_read_current_sha256": "ed814fbaec4af1d6618a0f80e0f61fae7cc9597f0747766bcc166834047b32bb",
+      "cheap_read_unchanged": true
+    },
+    "status": "COMPLETE",
+    "verification": {
+      "candidates": 77,
+      "failed_rows_excluded_not_relabeled": true,
+      "n_dependency_groups": 24,
+      "reason_counts": {},
+      "unverified_hard": 0,
+      "verified_hard": 77
+    }
+  },
   "frozen_protocol": {
     "bootstrap_draws": 10000,
     "bootstrap_seed": 1729,
@@ -109,5 +290,5 @@
     "source_layer": 16
   },
   "schema_version": "read-stress-v6-isolated-v1",
-  "status": "CHECK_1_COMPLETE"
+  "status": "CHECK_2_COMPLETE"
 }
