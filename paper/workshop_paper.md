@@ -2,270 +2,217 @@
 
 ## Abstract
 
-Methods that translate hidden activations into words can tell us that a concept is represented inside a language model. They do not, by themselves, tell us whether that concept contributes to the model's next behavior. We study this distinction using Anthropic's Jacobian Lens (J-Lens) and J-Space as the representational foundation. Our contribution is not a new lens. It is a candidate *READ* signal and an intervention-based test of what that signal can and cannot support.
+Methods that translate hidden activations into words can reveal that a concept is represented inside a language model, but not whether it contributes to the model's next behavior. We study this distinction using Anthropic's Jacobian Lens (J-Lens) and J-Space as the representational foundation. Our contribution is not a new lens: it is a candidate *READ* signal and an intervention-based test of what that signal can support.
 
-We construct matched prompts in which the same explicit concept is either needed to answer a question (an *engine*) or present but irrelevant to the answer (a *dashboard*). On Qwen2.5-7B-Instruct at layer 16, we first verify that the concept is written in both cases. We then establish expensive causal ground truth by interchanging the complete residual state at the concept token in both directions. Finally, we evaluate `READ_IG`, a donor-free score that integrates output gradients along a path between paired J-Lens concept directions. The cheap path is firewalled from the causal results.
+We construct matched prompts in which the same explicit concept is either needed for the answer (an *engine*) or visible but irrelevant (a *dashboard*). On Qwen2.5-7B-Instruct at layer 16, we verify that the concept is represented in both cases, establish causal ground truth by interchanging the complete residual state at the concept token in both directions, and evaluate `READ_IG`, which integrates output gradients along a path between paired J-Lens directions. The gradient path is firewalled from causal results.
 
-Of 118 candidate pairs, 25 are reserved for calibration and 93 for evaluation; 77 evaluation pairs in 24 dependency groups pass all frozen verification gates. `READ_IG` separates the causally relevant engines from both the original idle controls and answer-type-matched idle controls with ROC AUC 1.000 (95% group-bootstrap CI [1.000, 1.000]). A local-gradient score reaches 0.915 [0.864, 0.967], while a static capacity baseline is 0.500. The stronger interpretation fails: within engines, `READ_IG` does not rank causal magnitude (Spearman's rho = -0.179, 95% CI [-0.431, 0.126]). We therefore find evidence for a binary relevant-versus-idle detector in this setting, not for a graded meter of causal use. We label the broader graded claim **ARTIFACT (partial)** and state the scope narrowly: one model, explicit concepts, one selected layer, and a roster whose positive examples already have strong causal effects.
+Of 118 candidates, 25 are reserved for calibration and 93 for evaluation; 77 evaluation pairs in 24 dependency groups pass all frozen gates. `READ_IG` separates engines from both original and answer-type-matched idle controls with ROC AUC 1.000 (95% group-bootstrap CI [1.000, 1.000]). A local-gradient score reaches 0.915 [0.864, 0.967], while a static capacity baseline is 0.500. The stronger interpretation fails: within engines, `READ_IG` does not rank causal magnitude (Spearman's rho = -0.179, 95% CI [-0.431, 0.126]). This is evidence for a binary relevant-versus-idle detector in one narrow setting, not a graded causal-use meter.
 
 ## 1. Introduction
 
-A model can represent a concept without using it for the behavior we are examining. A prompt about aluminum may leave a clear aluminum-related state in the residual stream even when the requested answer is simply `2 + 2`. For an interpretability display, both a chemistry question and the arithmetic continuation may visibly contain *aluminum*. For a behavioral audit, however, they are different. In the chemistry question, changing the concept should change the answer. In the arithmetic continuation, it should not.
+A model can represent a concept without using it for the behavior under examination. A prompt about aluminum may leave a clear aluminum-related state even when the requested answer is `2 + 2`. An interpretability display may surface *aluminum* in both that prompt and a chemistry question, but a behavioral audit should distinguish them: changing the concept should change the chemistry answer and leave the arithmetic answer alone.
 
-Anthropic's work on [verbalizable representations and the global workspace](https://transformer-circuits.pub/2026/workspace/index.html) provides the starting point for this study. Its [J-Lens reference implementation](https://github.com/anthropics/jacobian-lens) transports an internal residual vector through an average Jacobian and decodes it in the model's output vocabulary. This makes otherwise hidden representations legible in word-like form. We reproduce and use that machinery; we do not claim it as our contribution.
+Direct intervention can test that distinction, but it is awkward as a routine screen. It requires a suitable donor, cached internal states, edited forward passes, and a normalization that makes effects comparable. A gradient score could be useful as an earlier filter if it predicts the same relevant-versus-idle contrast without consuming intervention outputs. The important scientific question is therefore not whether gradients can correlate with an intervention on a pooled dataset, but whether a frozen gradient rule survives held-out, causally checked controls.
 
-The question here begins one step later: once J-Lens has surfaced a concept, can we tell whether downstream computation is using it? The distinction matters for proposed monitoring applications. A detector that reports every visible concept as behaviorally active can create false alarms. A detector that mistakes an idle trace for a driver can also produce false mechanistic explanations. In external commentary accompanying Anthropic's report, Neel Nanda specifically asks for more evidence about reliability and false-positive behavior ([commentary, pp. 41--42](https://www-cdn.anthropic.com/files/4zrzovbb/website/cc4be2488d65e54a6ed06492f8968398ddc18ebe.pdf)). The present experiment supplies one small, controlled piece of that evidence.
+Anthropic's work on [verbalizable representations and the global workspace](https://transformer-circuits.pub/2026/workspace/index.html) supplies our starting point. Its [J-Lens reference implementation](https://github.com/anthropics/jacobian-lens) transports an internal residual vector through an average Jacobian and decodes it in the model's vocabulary. We reproduce and use that machinery; we do not claim it as our contribution.
 
-We call concept visibility **WRITTEN** and downstream behavioral sensitivity **READ**. The names are operational rather than ontological. WRITTEN means that the selected activation has a sufficiently large projection onto a J-Lens concept direction. READ means that a separately computed gradient score predicts membership in a causally validated relevant or idle task class. Neither label establishes that we have found a unique semantic variable or a complete circuit.
+Our question begins after a concept has surfaced: can we predict whether downstream computation uses it without running a donor-state intervention every time? This matters for monitoring because treating every visible trace as active can create false alarms and false mechanistic explanations. In commentary accompanying Anthropic's report, Neel Nanda asks for more evidence about reliability and false-positive behavior ([pp. 41--42](https://www-cdn.anthropic.com/files/4zrzovbb/website/cc4be2488d65e54a6ed06492f8968398ddc18ebe.pdf)). This controlled experiment provides one small piece of such evidence.
 
-Our main result has two parts. First, the gradient-integrated score `READ_IG` perfectly separates the relevant and idle classes in the frozen evaluation roster, including an answer-type-matched stress control. Second, that score does not order the already-relevant examples by causal-effect strength. The first result is encouraging, but the second changes its interpretation. The experiment supports a binary detector under these conditions. It does not support a graded “how much was this concept used?” ruler.
+We call concept visibility **WRITTEN** and behavior-conditioned sensitivity **READ**. These are operational labels, not claims to a unique semantic variable or complete circuit. Our result is asymmetric: `READ_IG` perfectly separates the frozen relevant and idle classes, including a harder matched-answer control, but does not order relevant examples by causal strength. We therefore claim a binary detector under these conditions, not a graded ruler.
 
-This paper makes three practical contributions:
-
-1. It defines a symmetric full-residual interchange score as causal ground truth for matched concept pairs.
-2. It evaluates a gradient-only, donor-free `READ_IG` estimator behind an explicit anti-circularity firewall.
-3. It reports both the successful binary test and the failed graded test, together with the instrument failures that shaped the final protocol.
-
-We use “gradient-only” to distinguish the estimator from donor-state interchange, not to claim that it is free to compute. `READ_IG` requires 16 gradient-bearing path evaluations. We did not benchmark wall-clock time or cost, so we do not make an empirical speedup claim.
+The practical contributions are a symmetric full-residual causal score for matched concept pairs, a donor-free gradient estimator behind an explicit anti-circularity firewall, and a report of both the successful binary test and failed graded test. “Gradient-only” distinguishes READ from donor interchange; it does not mean free. `READ_IG` requires 16 gradient-bearing midpoint evaluations per direction, and we did not benchmark runtime or claim a measured speedup.
 
 ## 2. Background: from J-Lens visibility to behavioral use
 
 ### 2.1 Anthropic's J-Lens and J-Space
 
-J-Lens is an Anthropic-developed method for reading verbalizable content from residual-stream activations. In simplified notation, a residual vector $h_\ell$ at layer $\ell$ is transported to the final residual basis using an average input-output Jacobian $J_\ell$, then decoded using the model's unembedding $U$:
+J-Lens is an Anthropic-developed method for reading verbalizable content from residual-stream activations. In simplified notation, it transports a residual vector $h_\ell$ to the final residual basis using an average input-output Jacobian $J_\ell$, applies the model's normalization, and decodes with its unembedding $U$:
 
 $$
-\operatorname{lens}_\ell(h_\ell) = U J_\ell h_\ell.
+\operatorname{lens}_\ell(h_\ell) = U\,\operatorname{norm}(J_\ell h_\ell).
 $$
 
-The resulting vocabulary scores let a researcher inspect which words an activation is disposed to make the model say. Anthropic's broader J-Space analysis argues that verbalizable representations can act like a global workspace shared across downstream computations. The accompanying code and lenses are the foundation we rely on here. The J-Lens repository is released under Apache-2.0; this artifact keeps its attribution and license boundary explicit.
+The resulting vocabulary scores describe which words an activation is disposed to make the model say. Anthropic's J-Space analysis studies the verbalizable directions as a sparse workspace shared across computations. Its method, published lenses, and canonical swaps are upstream work. The reference repository and its synthetic data are Apache-2.0 licensed.
 
-For a concept direction $v$ and residual state $h$, we use the scalar projection $h^\top v$ as the WRITTEN quantity. The final protocol selects layer 16 and a WRITTEN threshold of 2.482431 using calibration data only. Passing this gate says that the concept is detectably represented at the chosen token and layer. It says nothing yet about whether changing that state will affect the requested answer.
+This representational foundation is useful precisely because a readable direction can be reused across prompts. It also creates the ambiguity studied here: a direction may be active because the prompt mentions its concept, even when the requested computation has no reason to consult it. A visibility probe and a behavior-specific use test therefore answer different questions.
+
+For concept direction $v$ and residual state $h$, we use $h^\top v$ as the WRITTEN quantity. Calibration selects layer 16 and a threshold of 2.482431. Passing says that the concept is detectable at that token and layer; it does not say the concept affects the answer.
 
 ### 2.2 WRITTEN is not READ
 
-Our motivating contrast is between an *engine* and a *dashboard*. An engine prompt uses a concept to determine the completion. For example, a prompt can explicitly state that atomic number 13 corresponds to aluminum and ask for the chemical symbol. A dashboard prompt retains the same factual context and the same explicit aluminum token but asks for an unrelated answer. The dashboard may faithfully display the concept even though it does not drive the selected behavior.
+An *engine* prompt uses a concept to determine its completion. A matched *dashboard* retains the same fact context and explicit concept token but asks an unrelated question. We use causal interchange to validate that contrast and then ask whether a separate gradient score predicts the constructed class. WRITTEN is an inclusion gate, not a positive label; ROC labels are the relevant and idle tasks, not a thresholded version of either READ or the causal score.
 
-We use causal interchange to decide whether this contrast actually holds, then ask whether a cheaper score can predict the validated class. This ordering is important. A high WRITTEN score is a dataset inclusion criterion, not a positive label. Likewise, a high `READ_IG` score is evaluated against independently constructed task labels whose causal behavior is checked after the fact. We do not define “used” by thresholding the same score that we evaluate.
-
-### 2.3 Integrated gradients as a path attribution
-
-`READ_IG` adapts the path-integral idea behind [Integrated Gradients](https://arxiv.org/abs/1703.01365). Standard integrated gradients accumulate local sensitivities between a baseline and an input. Here the path is in activation space and is defined by a matched pair of J-Lens concept directions. The estimator measures how the behavior metric changes as the clean activation is moved away from its own concept and toward the paired concept. This is a local, behavior-conditioned quantity. It does not require a clean donor activation from another prompt, and it never reads the causal interchange output.
+`READ_IG` adapts [Integrated Gradients](https://arxiv.org/abs/1703.01365) to an activation-space path between paired J-Lens directions. It measures sensitivity of a specific answer metric without using a clean donor activation or reading causal outputs.
 
 ## 3. Method
 
 ### 3.1 Model, data, and frozen split
 
-All reported experiments use `Qwen/Qwen2.5-7B-Instruct`, revision `a09a35458c702b33eeacc393d103063234e8bc28`, in bfloat16. The model family is documented in the [Qwen2.5 technical report](https://arxiv.org/abs/2412.15115). We fix random seed 1729, use five evaluation folds, and use 10,000 bootstrap draws. A 20-prompt wrapper-agreement check gives a maximum mean KL divergence of $1.66\times10^{-8}$, well below the predeclared $10^{-3}$ tolerance.
+All experiments use `Qwen/Qwen2.5-7B-Instruct`, revision `a09a35458c702b33eeacc393d103063234e8bc28`, in bfloat16; the family is documented in the [Qwen2.5 technical report](https://arxiv.org/abs/2412.15115). We fix seed 1729, five folds, and 10,000 bootstrap draws. A 20-prompt wrapper check gives maximum mean KL $1.66\times10^{-8}$, below the $10^{-3}$ gate.
 
-The dataset contains 118 deterministic, reciprocal prompt pairs covering element-symbol, country-capital, and US-state-capital relations. Contexts that reuse an unordered concept pair belong to the same dependency group. We allocate whole groups to calibration until 25 prompt pairs are reserved; the remaining 93 pairs are evaluation candidates. Calibration is used to choose the layer and WRITTEN threshold. It is not included in the reported trust check.
+The dataset has 118 deterministic reciprocal pairs covering element symbols, country capitals, and US-state capitals. Repeated contexts using the same unordered concepts share a dependency group. Whole groups are allocated to calibration until 25 pairs are reserved, leaving 93 evaluation candidates. Calibration alone selects layer and WRITTEN threshold.
 
-An evaluation pair must satisfy all of the following frozen checks in both directions:
+Reciprocity means that each prompt pair supports both $A\rightarrow B$ and $B\rightarrow A$ reasoning under one shared relation. Grouping prevents near-duplicates built from the same concepts from appearing as independent evidence across folds or bootstrap draws. It also makes the reported sample size less flattering but more faithful: 77 rows are supported by 24 independent evaluation groups, not 77 unrelated semantic units.
 
-- the clean engine's top completion is the declared answer;
-- the J-Lens own-concept projection at the explicit concept token exceeds the frozen WRITTEN threshold;
-- the corresponding idle control produces its declared answer; and
-- the same explicit concept remains WRITTEN in that control.
-
-Seventy-seven evaluation pairs pass, and 16 remain `UNVERIFIED`; no failed row is relabeled. The 77 verified pairs span 24 evaluation dependency groups. The selected intervention location is layer 16 at the explicit concept token in a byte-identical shared fact context. This design deliberately narrows the result to explicit concepts.
+A pair must pass frozen checks in both directions: the engine's clean top completion is correct; the own-concept projection at the explicit concept token exceeds threshold; the idle control gives its declared answer; and that concept remains WRITTEN in the control. Seventy-seven pairs pass and 16 remain `UNVERIFIED`; none is relabeled. The verified pairs span 24 evaluation groups. The intervention location is the explicit concept token at L16 in a byte-identical shared fact context.
 
 ### 3.2 Expensive causal ground truth
 
-For a matched engine pair $A,B$, let the answer metric be the final-token logit difference
+For matched concepts $A,B$, define the final-token answer metric and clean scale
 
 $$
-M = \operatorname{logit}(y_A)-\operatorname{logit}(y_B),
+M=\operatorname{logit}(y_A)-\operatorname{logit}(y_B), \qquad T=M_A-M_B.
 $$
 
-and let the clean normalization be $T=M_A-M_B$. We capture the complete post-block residual vector at the explicit concept token for each clean prompt. We then install $B$'s residual vector into $A$ at that one location, and vice versa. If $M_{A\leftarrow B}$ and $M_{B\leftarrow A}$ are the two edited metrics, the directional recoveries are
+We capture each clean post-block residual at the concept token, install $B$'s complete state into $A$ and vice versa, and compute
 
 $$
 R_{A\leftarrow B}=\frac{M_A-M_{A\leftarrow B}}{T}, \qquad
-R_{B\leftarrow A}=\frac{M_{B\leftarrow A}-M_B}{T}.
+R_{B\leftarrow A}=\frac{M_{B\leftarrow A}-M_B}{T}, \qquad
+C=\frac{R_{A\leftarrow B}+R_{B\leftarrow A}}{2}.
 $$
 
-Our primary causal score is
+$C$ remains signed and unclipped. A directional discrepancy above 0.50 is pre-flagged; none occurs in the final engine or control measurements. Controls use their own answer metric while retaining their engine's $T$, expressing a control effect relative to the behavior it contrasts. This operation requires clean donors and two edited forwards per pair. We treat it as causal ground truth for this experiment, not as the monitoring signal.
 
-$$
-C=\frac{1}{2}\left(R_{A\leftarrow B}+R_{B\leftarrow A}\right).
-$$
+Using both swap directions matters. A one-way edit can look successful because one prompt is unusually easy to disrupt or because normalization is asymmetric. Averaging two signed recoveries makes the intended exchange explicit, while retaining the directional values lets us reject pairs whose mean would conceal disagreement. Keeping values unclipped similarly prevents the summary from hiding overshoot or sign reversal.
 
-We preserve $C$ as signed and unclipped. Values above one or below zero therefore remain visible rather than being silently truncated. A directional discrepancy greater than 0.50 is pre-flagged; none of the 77 final engine, original-dashboard, or hard-dashboard measurements crosses that threshold. Controls use their own answer metric but retain the matched engine's $T$ as the response scale, so a dashboard's near-zero effect is expressed relative to the engine behavior it is meant to contrast.
+### 3.3 Gradient-only READ
 
-This operation is deliberately expensive and strong: it requires clean residual donors and two edited forwards per pair. We treat it as the causal truth for this experiment, not as the proposed monitoring signal.
-
-### 3.3 Gradient-only READ estimators
-
-Let $h_A,h_B$ be clean layer-16 states and $v_A,v_B$ the corresponding unit J-Lens concept directions. The two activation paths are defined by
+Let $h_A,h_B$ be clean L16 states and $v_A,v_B$ the corresponding unit J-Lens directions. Define
 
 $$
 \Delta_A=(h_A^\top v_A)(v_B-v_A), \qquad
 \Delta_B=(h_B^\top v_B)(v_A-v_B).
 $$
 
-For direction $i\in\{A,B\}$ and $K=16$ midpoint steps, we compute
+For direction $i$ and $K=16$ midpoint steps,
 
 $$
 I_i=\frac{1}{K}\sum_{k=1}^{K}
 \nabla_h M\!\left(h_i+\frac{k-1/2}{K}\Delta_i\right)^\top\Delta_i,
-$$
-
-then define
-
-$$
+\qquad
 \operatorname{READ}_{IG}=\frac{|I_A|+|I_B|}{2}.
 $$
 
-The absolute value makes the score a magnitude of behavior-conditioned sensitivity; it is not a claim about a universal semantic sign. The paired, symmetric construction avoids choosing whichever concept direction happens to look more favorable.
+This symmetric magnitude avoids selecting a favorable concept or sign. `READ_local` uses only the clean-point derivative. The behavior-independent capacity baseline passes concept directions through a downstream MLP and measures static response norm, testing whether engine directions merely occupy higher-gain subspaces.
 
-We report two comparisons. `READ_local` evaluates only the clean-point derivative, combining concept amount with the gradient projected onto its own concept direction. The capacity baseline passes the concept directions through a downstream MLP and measures static response norm without using the behavior metric. It tests a simpler hypothesis: perhaps directions associated with engines merely occupy higher-gain downstream subspaces.
-
-We use the word “cheap” operationally: the READ path avoids storing and installing donor activations and avoids causal interchange outputs. It still performs multiple forward/backward evaluations. Since this study contains no runtime benchmark, the defensible description is *gradient-only and donor-free*, not *measured faster*.
+The path is defined from the clean concept amount and the paired directions, not from an observed causal effect. Its absolute value asks how sensitive the answer is along that prespecified exchange direction; it does not estimate the sign of a future intervention. This distinction is why the score can sensibly support binary screening even after it fails as a calibrated magnitude.
 
 ### 3.4 Anti-circularity firewall
 
-The causal and cheap computations are separated in code and artifacts:
+The dataset stage freezes model revision, layer, threshold, folds, verified rows, clean prompts, and directions. Calibration-group causal separation may inform the layer choice, but no evaluation-group $C$ is exposed to the estimator. The evaluation causal stage writes $C$ separately. The cheap stage reads only the sanitized manifest and direction cache; its module imports no causal, patching, or interchange code and accepts no $C$. Hard-control READ is frozen before hard-control $C$ is computed. Only model-free evaluation joins artifacts by pair ID. Thus evaluation outcomes cannot choose a per-example sign, transformation, threshold, or exclusion in the cheap path.
 
-1. Dataset construction freezes the model revision, layer, threshold, folds, verified rows, clean prompts, and direction cache.
-2. The causal stage reads that manifest and writes $C$ without exposing it to the cheap estimator.
-3. The cheap stage reads only the sanitized clean manifest and direction cache. Its module imports no causal, patching, or interchange code and has no argument through which $C$ can enter.
-4. For the hard controls, `READ_IG` is computed and frozen before hard-control $C$ is calculated.
-5. Only the model-free evaluation stage joins the frozen READ and causal artifacts by pair ID.
+This is stronger than merely promising not to tune on a plot. The filesystem artifacts and import graph encode the ordering: notebook 03 cannot read notebook 02's causal output, and the hard-control causal file does not exist when its READ values are frozen. The final join is evaluative rather than generative.
 
-Thus the causal scores cannot select a per-example sign, transformation, threshold, or exclusion in the cheap path. The selected layer and WRITTEN threshold come from calibration groups, not from the 24 evaluation groups. This firewall is the main reason the final binary result is interpretable despite the extensive failed work that preceded it.
+### 3.5 Evaluation and hard control
 
-### 3.5 Evaluation and the hard control
+The primary statistic is pooled out-of-fold ROC AUC over five folds assigned by complete dependency group. Confidence intervals resample all rows in an unordered-concept group together for 10,000 draws. The class labels are constructed engine versus idle tasks, then causally validated; they are not produced by thresholding $C$.
 
-The primary test is pooled out-of-fold ROC AUC over five deterministic folds assigned by complete dependency group. Confidence intervals resample all rows belonging to an unordered concept group together for 10,000 draws. This preserves repeated contexts and their matched engine/control dependence.
+Original dashboards ask arithmetic questions, so we add controls with the same semantic answer class as their engines. Each retains the source fact and explicit concept but asks for a fixed calibration-only anchor: platinum $\rightarrow$ `Pt`, Netherlands $\rightarrow$ `Amsterdam`, or Alabama $\rightarrow$ `Montgomery`. The source concept cannot determine that answer. All 77 hard controls pass clean-answer and WRITTEN checks. For gradedness, we avoid a post-hoc weak/strong cutoff and compute engine-only Spearman correlation between frozen READ and $|C|$ with the same grouped bootstrap.
 
-The ROC labels are the constructed task classes: relevant engine versus deliberately idle dashboard. They are **not** obtained by thresholding $C$. The causal score instead validates the intended meaning of those classes: engines should have large interchange effects and dashboards should not. This distinction prevents AUC from becoming a tautological prediction of a discretized version of the target score.
-
-The original dashboards ask an arithmetic question and therefore differ from engines in answer type. We add a harder control that retains the original natural context and explicit source concept but asks the same relation and semantic answer class using a fixed calibration-only anchor: platinum $\rightarrow$ `Pt`, Netherlands $\rightarrow$ `Amsterdam`, or Alabama $\rightarrow$ `Montgomery`. The source concept cannot determine that fixed answer. All 77 hard controls pass their frozen clean-answer and WRITTEN checks.
-
-Finally, we test gradedness without making a post-hoc weak/strong cutoff. Among the 77 engines alone, we compute Spearman correlation between the frozen READ score and $|C|$, again with dependency-group bootstrap confidence intervals. This is the decisive test of whether READ ranks causal magnitude after class membership is held fixed.
+The hard control is aimed at one concrete alternative explanation: that gradients distinguish arithmetic outputs from symbols or city names. It is not presented as a universal negative set. Keeping its target fixed within each relation family makes source-concept irrelevance transparent and makes clean-answer verification possible before any causal result is inspected.
 
 ## 4. Results
 
-### 4.1 The causal instrument separates relevant and idle concepts
+### 4.1 Causal sanity
 
-The engine median signed $C$ is 0.912714, and its median $|C|$ is also 0.912714. The original dashboards have median signed $C=-0.002043$ and median $|C|=0.005083$. The answer-type-matched hard dashboards have median $|C|=0.006466$. None of the three families has a sharp directional-disagreement flag. The full-state interchange therefore behaves as required for the final roster: changing the explicit concept state changes the answer in engines, but barely affects either idle control family.
+Dependency-group bootstrap intervals confirm the intended engine/control contrast:
 
-![Causal effects for engines and idle controls](figures/f1_causal_sanity.png)
-
-**Figure 1.** Symmetric full-residual causal sanity. Engines have large effects; original and hard dashboards remain close to zero.
-
-The agreement between the two swap directions is shown separately because a mean can otherwise conceal an unstable intervention.
-
-![Directional agreement for symmetric interchange](figures/f6_directional_agreement.png)
-
-**Figure 2.** Directional interchange agreement. The final rows do not rely on one anomalous swap direction.
-
-### 4.2 READ detects relevant versus idle use
-
-The primary `READ_IG` score separates engines from original dashboards with AUC 1.000 and a 95% group-bootstrap interval of [1.000, 1.000]. `READ_local` is weaker but still informative at 0.914825 [0.863661, 0.967161]. The behavior-independent capacity baseline is exactly chance at 0.500 [0.500, 0.500].
-
-| Estimator | Engine vs. original dashboard AUC | 95% group-bootstrap CI |
+| class and statistic | median | grouped 95% CI |
 | --- | ---: | ---: |
-| `READ_IG` | 1.000000 | [1.000000, 1.000000] |
-| `READ_local` | 0.914825 | [0.863661, 0.967161] |
-| static capacity baseline | 0.500000 | [0.500000, 0.500000] |
+| engine signed $C$ | 0.912714 | [0.896378, 0.929191] |
+| engine $|C|$ | 0.912714 | [0.896378, 0.929191] |
+| original dashboard signed $C$ | -0.002043 | [-0.003652, 0.002326] |
+| original dashboard $|C|$ | 0.005083 | [0.003587, 0.007752] |
+| hard dashboard signed $C$ | 0.001235 | [-0.001546, 0.005780] |
+| hard dashboard $|C|$ | 0.006466 | [0.004013, 0.010064] |
+
+Changing the explicit concept state changes engine answers but barely affects either idle family. No family produces a sharp directional-disagreement flag.
+
+The intervals reinforce the same interpretation as the point estimates. Engine recovery remains near one across grouped resamples, whereas both dashboard signed intervals cover zero and their absolute effects remain small. These summaries validate the constructed task contrast; they do not turn a continuous $C$ threshold into the class label used for AUC.
+
+![Causal effects for engines and original idle controls](figures/f1_causal_sanity.png)
+
+**Figure 1.** Signed causal recovery for engines and original dashboards. Hard-control causal summaries are reported in the table above.
+
+![Directional agreement for engine and original-dashboard interchange](figures/f6_directional_agreement.png)
+
+**Figure 2.** Agreement between the two swap directions for engines and original dashboards; the mean does not conceal a one-direction anomaly.
+
+### 4.2 Binary detection succeeds
+
+Against original dashboards, `READ_IG` reaches AUC 1.000 [1.000, 1.000]. `READ_local` reaches 0.914825 [0.863661, 0.967161], and static capacity is 0.500 [0.500, 0.500].
 
 ![Binary AUC and baseline](figures/f2_binary_auc_and_baseline.png)
 
-**Figure 3.** Held-out binary detection. The AUC labels are relevant/idle task classes validated by $C$, not labels created by thresholding $C$.
+**Figure 3.** Held-out relevant-versus-idle AUC. Labels are causally validated tasks, not thresholded $C$.
 
-The hard-control comparison produces the same primary result: engine versus hard dashboard AUC is 1.000 [1.000, 1.000]. This rules out the narrow explanation that `READ_IG` succeeds only because the original dashboards end in arithmetic rather than a chemical symbol or capital name.
+Engine versus hard dashboard AUC is also 1.000 [1.000, 1.000], ruling out arithmetic answer type as the sole explanation.
 
 ![Original and answer-type-matched control AUC](figures/f4_hard_dashboard_auc.png)
 
-**Figure 4.** `READ_IG` maintains perfect separation when the idle control uses the same semantic answer type as the engine.
+**Figure 4.** `READ_IG` preserves binary separation under the matched-answer control.
 
-The raw distributions make the operating behavior clearer. Engine scores range from 0.034970 to 0.992770, with median 0.210247. Original-dashboard scores range from 0.000881 to 0.023411, with median 0.005553. Hard-dashboard scores range from 0.001650 to 0.021032, with median 0.006319. The two dashboard ranges substantially overlap each other and remain disjoint from the engine range in this roster.
+Engine READ scores range from 0.034970 to 0.992770 (median 0.210247); original dashboards from 0.000881 to 0.023411 (median 0.005553); and hard dashboards from 0.001650 to 0.021032 (median 0.006319). Both idle bands overlap each other and remain disjoint from engines in this roster.
 
 ![Raw READ_IG distributions](figures/f5_read_ig_distributions.png)
 
-**Figure 5.** The final score behaves as a relevant-versus-idle separator: both idle families occupy a compressed low band.
+**Figure 5.** Raw scores show a relevant-versus-idle separator, not a calibrated causal magnitude.
 
-Perfect empirical separation should be read literally and locally. It says that no verified dashboard outranks a verified engine under the frozen score on this dataset. The bootstrap interval conditions on the sampled dependency groups; it does not establish a universal false-positive rate for other concepts, layers, models, or prompt distributions.
+Perfect empirical separation is local: no verified dashboard outranks an engine here. The interval conditions on the 24 observed groups and is not a universal false-positive bound for other concepts, layers, models, or distributions.
 
-### 4.3 READ does not measure graded causal strength
+### 4.3 Graded use fails
 
-Within engines, $|C|$ ranges only from 0.785789 to 1.012025. Over these 77 already-strong cases, `READ_IG` has Spearman $\rho=-0.179110$ with a 95% group-bootstrap interval of [-0.431377, 0.126014]. The point estimate is negative and the interval spans zero. `READ_local` and the capacity baseline also have intervals spanning zero. We therefore find no positive graded-use signal within engines.
+Engine $|C|$ ranges only from 0.785789 to 1.012025. Within these 77 already-strong cases, `READ_IG` has Spearman $\rho=-0.179110$ with grouped 95% CI [-0.431377, 0.126014]. The point estimate is negative and the interval spans zero, so there is no positive graded-use evidence.
 
 ![Engine-only graded check](figures/f3_engine_only_graded_check.png)
 
-**Figure 6.** Engine-only `READ_IG` versus $|C|$. The frozen score does not order causal strength among the positive class.
+**Figure 6.** Engine-only READ versus $|C|$; the score does not order causal strength within the positive class.
 
-Across engines and dashboards pooled together, `READ_IG` has $\rho=0.707412$ with $|C|$. That number is not evidence for graded measurement: it is largely the same between-class separation already captured by AUC. Once class membership is held fixed, the positive association disappears. We did not create a weak/strong engine cutoff after seeing the values, because the protocol specified no such cutoff and the observed range contains no defensible natural split.
-
-The formal verdict is therefore asymmetric:
-
-- **binary relevant-versus-idle detector:** supported;
-- **graded causal-use meter:** not supported; and
-- **broader stress-test label:** **ARTIFACT (partial)**.
-
-“Partial” does not erase the binary result. It records that a narrower interpretation survives while the stronger one does not.
+The pooled engine/dashboard correlation, $\rho=0.707412$, largely restates the class gap and is not graded evidence. We did not create a weak/strong cutoff after inspection. The formal verdict is therefore: **binary detector supported; graded meter not supported; broader stress-test label `ARTIFACT (partial)`.**
 
 ## 5. Research arc and limitations
 
-### 5.1 Failed instruments before a usable ground truth
+### 5.1 Failed instruments and READ definitions
 
-The clean result was reached only after several invalid or unsuccessful designs. We preserve these experiments because they change how much confidence the final number deserves.
+The first apparent negative used a broken instrument. A canonical spider-to-ant swap should have moved a leg-count answer from 8 toward 6, but produced 4. We discarded the conclusion. After correcting token surfaces, Jacobian convention, and intervention setup, three canonical swaps reproduced in all three cases.
 
-The first apparent negative used a broken causal instrument. In a canonical check, swapping the internal representation of spider toward ant should move a leg-count answer from 8 toward 6. The run produced 4 instead. We discarded the scientific conclusion: a failed calibration cannot adjudicate the hypothesis. After correcting token surfaces, the Jacobian convention, and the intervention setup, three canonical swaps reproduced in all three cases.
+The repaired edit was then too broad. Editing all positions across layers 13--24 at $\alpha=2$ changed negative log-likelihood on 24 unrelated texts by mean 0.623323 and mean absolute 0.669081, beyond the 0.25 damage guard. A masked variant appeared harmless only because every mask was empty. Later designs exposed further instrument problems: a final-answer dashboard made WRITTEN void; L26 full-residual interchange had engine median $|C|\approx0.0022$; and a latent-boundary sweep reached only 0.0076 for engines versus 0.0039 for dashboards. These failures motivated the explicit concept token and calibration-selected L16.
 
-The repaired edit was then too broad. An all-position, layer-13--24 intervention at strength $\alpha=2$ changed negative log-likelihood on 24 unrelated texts by a mean of 0.623323 and a mean absolute amount of 0.669081, above the predeclared 0.25 damage guard. Apparent causal effects under that edit could reflect general model damage. A masked variant avoided the measured damage on the capability bank only because all 24 masks were empty, so that null was a no-op rather than affirmative safety evidence.
+Plausible READ definitions also failed. A local attribution score had Pearson $r=0.061845$ with its intervention endpoint (95% CI [-0.406415, 0.482404], $N=20$). A static capacity score marked none of eight quiet narration cases low-READ. A behavior-specific path score had $\rho=-0.076623$ [-0.517658, 0.408929] on 21 known-answer cases, while all eight narration paths were empty. An intermediate 163-case validation had 49 label failures and only four dashboard concepts; its only complete READ score ranked classes backward, AUC 0.078333 [0.021429, 0.152032]. We did not flip signs or replace missing values after seeing these results.
 
-Later, the first final-position version of the matched protocol made the dashboard WRITTEN check void. Moving to a shared-context boundary restored comparability, but layer 26 had engine median $|C|\approx0.0022$: with only one downstream block left, the instrument had almost no leverage. A calibration sweep over latent boundary states did not rescue it; the best engine median was 0.0076 versus 0.0039 for dashboards. These failures motivated the explicit natural fact and the exact concept-token intervention at layer 16. That change also narrows the claim: the final result is about explicitly written concepts, not arbitrary latent thoughts.
+Those failures led to the final reciprocal prompts, explicit tokens, symmetric full-state truth, group-held-out inference, verification gates, and frozen cheap path. The archive in `experiments/` preserves the full record.
 
-### 5.2 READ definitions that failed
+The sequence also explains why perfect final AUC is not presented as inevitable. Several earlier scores had plausible motivations and favorable-looking subsets, yet failed their frozen gates. The final claim rests on the corrected instrument and held-out protocol, not on selecting only successful historical attempts.
 
-Several plausible READ scores did not validate. A local attribution attempt had Pearson correlation 0.061845 with the intervention endpoint (95% CI [-0.406415, 0.482404], $N=20$). A global static capacity score marked none of eight causally quiet narration examples as low-read. A behavior-specific path score reached Spearman $\rho=-0.076623$ (95% CI [-0.517658, 0.408929], $N=21$), while its path finder returned an empty path for all eight narration controls. An absent measurement was not counted as evidence of low use.
+### 5.2 Remaining limitations
 
-An intermediate held-out validation also failed on its own terms. It contained 163 cases but only four independent dashboard concepts; 49 of the 163 rows failed declared-label verification. Two causal proxies agreed only moderately ($\rho=0.410167$). The only complete global READ score ranked the intended classes backwards, with AUC 0.078333 [0.021429, 0.152032], and the more targeted scores were undefined under the predeclared complete-coverage rule. We did not flip the sign or fill missing values after observing the result.
+This is one pinned 7B model, one selected layer, three structured relations, and explicit single-token concepts. It does not establish transfer to other models, layers, languages, free-form reasoning, or implicit concepts. The 77 engines also occupy a narrow, strong causal range. Range restriction may hide a real graded relation, but cannot justify claiming one; a follow-up should preregister weak, medium, and strong engines.
 
-Those failures led to the final matched design: clean labels, reciprocal concepts, explicit tokens, symmetric full-state truth, group-held-out evaluation, and a cheap score frozen without access to causal outcomes. The failures are not independent evidence that `READ_IG` works, but they explain why the successful protocol includes unusually explicit gates.
+Full-residual interchange is behavioral evidence, not proof that one J-Lens direction is the unique mechanism: the replacement can carry correlated information. The matched design, WRITTEN gate, two directions, and controls reduce this ambiguity but do not eliminate it. The hard control addresses answer type using three fixed anchors, not every lexical or distributional confound. More adversarial controls are needed.
 
-### 5.3 What the final experiment still does not establish
+The experiment also estimates discrimination, not an operating threshold. Perfect AUC means every positive outranks every negative in this roster; it does not specify a score cutoff with a known false-alarm rate on future prompts. A practical monitor would need calibration under deployment-like class prevalence, repeated paraphrases, and controls designed to mimic the positive prompts more closely.
 
-The evidence remains limited in several ways.
-
-First, this is one pinned 7B model, one selected layer, and three structured relation families. It does not establish transfer to other model sizes, architectures, layers, multilingual concepts, free-form reasoning, or concepts that are only implicit. Selection of layer 16 and the WRITTEN threshold was protected by calibration groups, but it remains a choice tailored to this model and dataset.
-
-Second, the 77 engines occupy a narrow and already-strong causal range. Range restriction may make a real graded relationship difficult to detect. It cannot, however, justify claiming such a relationship from the present data. The needed follow-up is a dataset designed in advance to span weak, medium, and strong causal effects while holding prompt family and answer type fixed.
-
-Third, full-residual interchange is a behavioral intervention, not proof that a single J-Lens direction is the unique mechanism. Replacing the full state at one token can transport other information correlated with the concept. The matched construction, WRITTEN gate, two directions, and idle controls reduce this ambiguity but do not eliminate it.
-
-Fourth, the hard control addresses answer-type confounding but is not exhaustive. It uses three fixed calibration anchors and the same relation families as the engines. Other idle controls could preserve more lexical, syntactic, or distributional detail. AUC 1.000 on this roster should motivate adversarial controls, not end the search for false positives.
-
-Fifth, group bootstrap quantifies sampling variability over the 24 observed dependency groups. Perfect separation yields a degenerate-looking interval because every resample preserves separation. This interval does not account for model selection, new task families, prompt paraphrases, or distribution shift.
-
-Finally, `READ_IG` has not been timed against causal interchange. It is donor-free and does not require causal artifacts, but 16 midpoint gradient evaluations are not free. A deployment-oriented claim would require wall-clock, memory, throughput, and calibration-cost measurements on the same hardware.
-
-An exploratory post-success localization test also failed to identify a strongly faithful compact top-eight circuit: faithfulness fractions for three cases were 0.3649, 0.2387, and 0.3623. We make no compact-circuit claim.
+Group bootstrap measures variability over the 24 observed groups; it does not capture task selection, paraphrases, or distribution shift. `READ_IG` also has no runtime, memory, or throughput benchmark. Finally, an exploratory top-eight localization test achieved faithfulness fractions only 0.3649, 0.2387, and 0.3623, so we make no compact-circuit claim.
 
 ## 6. Conclusion and future work
 
-This experiment separates two questions that are often collapsed. Anthropic's J-Lens can expose a verbalizable concept in a residual state. Our results ask whether a gradient-only signal can predict whether that visible concept matters for a particular answer.
+Anthropic's J-Lens exposes verbalizable concepts; our experiment asks whether a gradient-only score can predict whether one matters for an answer. In the frozen Qwen2.5-7B setting, `READ_IG` separates causally validated relevant concepts from two idle families, including matched-answer controls, without seeing donor states, edited outputs, or $C$. The chance-level capacity baseline argues against a purely static high-gain explanation.
 
-Within the frozen Qwen2.5-7B setting, the answer is yes for a binary distinction. `READ_IG` separates causally validated relevant concepts from two families of causally idle concepts, including controls matched on semantic answer type. The anti-circularity firewall matters here: the estimator never sees $C$, donor activations, edited outputs, or per-example causal labels. The chance-level capacity baseline also suggests that the result is not explained simply by a concept direction lying in a high-gain downstream subspace.
+The stronger result is negative: READ does not rank causal magnitude within engines. We therefore regard it as a narrow use-versus-idle detector, not a general meter of how strongly a model used a thought. The next study should preregister a broader causal range, multiple models and layers, implicit concepts, tighter adversarial controls, and runtime measurements.
 
-The answer is no for the stronger graded claim. `READ_IG` does not rank causal magnitude within engines, and the pooled correlation is dominated by class separation. We therefore regard the main result as a validated use-versus-idle detector in a narrow setting, not as a general meter of how strongly a model used a thought.
-
-The next experiment should be designed around this failure. It should preregister a broad causal range; include weak, medium, and strong engines rather than deriving a cutoff after the fact; use multiple models and layers; add adversarial idle controls with tighter lexical matching; test implicit as well as explicit concepts; and report runtime alongside causal and statistical reliability. The most informative outcome may again be mixed: a detector that is useful for screening can still be unsuitable for causal ranking. Keeping those claims separate is a feature, not a concession.
+That next study should preserve the same separation of roles: calibration may choose a global protocol, the cheap path must freeze before evaluation interventions are examined, and graded evidence must come from variation within a causally positive class. Without those safeguards, a strong pooled association could again be only a class separator in disguise.
 
 ## Reproducibility and ethics statement
 
-The artifact pins the model ID and revision, bfloat16 dtype, seed 1729, layer 16, WRITTEN threshold 2.482431, 16 midpoint steps, five group folds, and 10,000 group-bootstrap draws. The repository separates dataset construction, causal truth, cheap READ, evaluation, and plotting into explicit stages. Reported headline values are recorded in `results/PROVENANCE_pre_refactor.json`; the cleaned release reruns the full pipeline and compares its post-refactor provenance against that frozen snapshot with a $10^{-3}$ numerical tolerance. Failed and superseded experiments are retained in `experiments/` rather than deleted.
+The artifact pins model revision, bfloat16 dtype, seed 1729, L16, WRITTEN threshold 2.482431, 16 midpoint steps, five group folds, and 10,000 bootstrap draws. Its five stages separate dataset construction, causal truth, cheap READ, evaluation, and plotting. The cleaned pipeline was rerun and compared with the frozen pre-refactor provenance at $10^{-3}$ tolerance; failed experiments remain archived.
 
-The work uses synthetic factual prompt templates and model outputs; it does not involve human participants or private personal data. The relevant ethical risk is overconfidence. A concept-use detector may be attractive for model monitoring, but this experiment does not establish safety performance, deployment thresholds, or false-positive rates under distribution shift. Reporting the failed graded test, the failed instruments, and the limited scope is therefore part of the safety case for the artifact rather than an incidental caveat.
-
-We attribute J-Lens/J-Space and their reference implementation to Anthropic. Our contribution begins with the READ estimators, the firewall, and their causal validation. Model weights, upstream code, and downloaded artifacts remain subject to their respective licenses; the J-Lens reference code is Apache-2.0.
+Prompts are synthetic factual templates and no human participants or private data are involved. The main ethical risk is overconfidence: this experiment establishes neither deployment thresholds nor safety performance under shift. We attribute J-Lens/J-Space and their code to Anthropic; our contribution begins with READ, its firewall, and its validation. Upstream code and model weights retain their own licenses.
 
 ## References
 
-1. Wes Gurnee, Nicholas Sofroniew, Adam Pearce, et al. [*Verbalizable Representations Form a Global Workspace in Language Models*](https://transformer-circuits.pub/2026/workspace/index.html). Anthropic, Transformer Circuits Thread, 2026.
+1. Wes Gurnee, Nicholas Sofroniew, Adam Pearce, et al. [*Verbalizable Representations Form a Global Workspace in Language Models*](https://transformer-circuits.pub/2026/workspace/index.html). Anthropic, 2026.
 2. Anthropic. [*Jacobian Lens reference implementation*](https://github.com/anthropics/jacobian-lens), commit `581d398`, 2026.
 3. Mukund Sundararajan, Ankur Taly, and Qiqi Yan. [*Axiomatic Attribution for Deep Networks*](https://arxiv.org/abs/1703.01365), 2017.
 4. An Yang, Baosong Yang, Beichen Zhang, et al. [*Qwen2.5 Technical Report*](https://arxiv.org/abs/2412.15115), 2024.
-5. Anthropic. [*External commentary accompanying the global-workspace report*](https://www-cdn.anthropic.com/files/4zrzovbb/website/cc4be2488d65e54a6ed06492f8968398ddc18ebe.pdf), especially Neel Nanda's comments on reliability and false-positive evidence, pp. 41--42, 2026.
+5. Anthropic. [*External commentary accompanying the global-workspace report*](https://www-cdn.anthropic.com/files/4zrzovbb/website/cc4be2488d65e54a6ed06492f8968398ddc18ebe.pdf), especially Neel Nanda's comments on reliability and false positives, pp. 41--42, 2026.

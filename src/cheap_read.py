@@ -107,6 +107,8 @@ def batch_token_difference_metric(
         raise ValueError("Behavior metric tokens must differ")
 
     def metric(logits: torch.Tensor) -> torch.Tensor:
+        """Evaluate one positive-minus-negative logit difference per row."""
+
         if logits.ndim != 3:
             raise ValueError("Expected logits shaped [B,S,V]")
         return logits[:, -1, positive].float() - logits[:, -1, negative].float()
@@ -115,6 +117,8 @@ def batch_token_difference_metric(
 
 
 def _position_index(sequence_length: int, position: int) -> int:
+    """Resolve one possibly-negative activation position."""
+
     index = int(position)
     if index < 0:
         index += sequence_length
@@ -130,6 +134,8 @@ def _position_indices(
     *,
     device: torch.device,
 ) -> torch.Tensor:
+    """Resolve a scalar or per-row position specification to tensor indices."""
+
     if isinstance(position, int):
         values = [_position_index(sequence_length, position)] * batch_size
     else:
@@ -142,6 +148,8 @@ def _position_indices(
 
 
 def _hidden_from_output(output: Any) -> torch.Tensor:
+    """Extract the residual tensor from a decoder block output."""
+
     if torch.is_tensor(output):
         return output
     if isinstance(output, tuple) and output and torch.is_tensor(output[0]):
@@ -150,6 +158,8 @@ def _hidden_from_output(output: Any) -> torch.Tensor:
 
 
 def _replace_output_hidden(output: Any, hidden: torch.Tensor) -> Any:
+    """Replace a decoder block's residual tensor without dropping auxiliaries."""
+
     if torch.is_tensor(output):
         return hidden
     if isinstance(output, tuple) and output and torch.is_tensor(output[0]):
@@ -161,6 +171,8 @@ def _validate_directions(
     direction_a: torch.Tensor,
     direction_b: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return two detached fp32 unit directions after strict validation."""
+
     a = direction_a.detach().float()
     b = direction_b.detach().float()
     if a.ndim != 1 or b.shape != a.shape:
@@ -198,6 +210,8 @@ def clean_batch_states(
     captured: dict[str, torch.Tensor] = {}
 
     def hook(module: nn.Module, inputs: tuple[Any, ...], output: Any) -> Any:
+        """Capture the selected block's clean residual output."""
+
         del module, inputs
         captured["hidden"] = _hidden_from_output(output).detach()
         return output
@@ -256,6 +270,8 @@ def activation_metric_gradients(
     captured: dict[str, torch.Tensor] = {}
 
     def hook(module: nn.Module, inputs: tuple[Any, ...], output: Any) -> Any:
+        """Create the activation leaf and install the requested path offset."""
+
         del module, inputs
         hidden = _hidden_from_output(output)
         if hidden.shape[0] != offsets.shape[0] or hidden.shape[-1] != offsets.shape[1]:
@@ -696,6 +712,7 @@ def compute_base_cheap_read(
     *,
     clean_manifest_sha256: str,
     direction_cache_sha256: str | None = None,
+    cheap_read_sha256: str | None = None,
     ig_steps: int = 16,
     progress: ProgressFn | None = None,
 ) -> dict[str, Any]:
@@ -718,6 +735,8 @@ def compute_base_cheap_read(
     source_sha256 = _validated_sha256(
         clean_manifest_sha256, label="clean_manifest_sha256"
     )
+    observed_cache_sha256: str | None = None
+    cache_hash_validated = False
     if direction_cache_sha256 is not None:
         observed_cache_sha256 = _validated_sha256(
             direction_cache_sha256, label="direction_cache_sha256"
@@ -726,6 +745,7 @@ def compute_base_cheap_read(
         if isinstance(expected_cache, dict) and expected_cache.get("sha256") is not None:
             if observed_cache_sha256 != str(expected_cache["sha256"]).lower():
                 raise ValueError("Direction-cache byte hash differs from clean manifest")
+            cache_hash_validated = True
 
     selected_layer, position_rule = _selected_layer_and_rule(clean_manifest)
     hf_model, tokenizer, blocks = _model_and_blocks(bundle, clean_manifest)
@@ -795,6 +815,15 @@ def compute_base_cheap_read(
         if progress is not None:
             progress(completed, total, compact_base_cheap_read_rows([row])[0])
 
+    audit = _base_firewall_audit()
+    audit["direction_cache_sha256_validated"] = cache_hash_validated
+    if observed_cache_sha256 is not None:
+        audit["direction_cache_sha256"] = observed_cache_sha256
+    if cheap_read_sha256 is not None:
+        audit["cheap_read_sha256"] = _validated_sha256(
+            cheap_read_sha256,
+            label="cheap_read_sha256",
+        )
     return {
         "schema_version": "symmetric-cheap-read-v1",
         "protocol_sha256": protocol_sha256,
@@ -803,7 +832,7 @@ def compute_base_cheap_read(
         "selected_layer": selected_layer,
         "position_rule": position_rule,
         "ig_steps": int(ig_steps),
-        "anti_circularity_audit": _base_firewall_audit(),
+        "anti_circularity_audit": audit,
         "rows": raw_rows,
     }
 

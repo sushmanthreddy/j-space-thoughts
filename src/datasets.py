@@ -232,12 +232,16 @@ def continuation_token_id(
 
 
 def _concept_answer_key(item: Mapping[str, Any]) -> tuple[str, str]:
+    """Return the normalized concept/answer identity used for pairing."""
+
     return (str(item["intermediate"]).casefold(), str(item["answer"]).casefold())
 
 
 def _reciprocal_group_key(
     item: Mapping[str, Any],
 ) -> tuple[str, tuple[str, str], tuple[str, str]]:
+    """Return an order-invariant reciprocal dependency-group key."""
+
     source = _concept_answer_key(item)
     target = (str(item["swap_to"]).casefold(), str(item["swap_answer"]).casefold())
     low, high = sorted((source, target))
@@ -700,6 +704,8 @@ def apply_symmetric_verification_gate(
 
 
 def _single_token_id(tokenizer: Any, surface: str) -> int:
+    """Resolve an exact hard-control surface to one vocabulary ID."""
+
     token_ids = tokenizer.encode(surface, add_special_tokens=False)
     if len(token_ids) != 1:
         raise ValueError(f"Expected one token for {surface!r}, got {token_ids}")
@@ -707,6 +713,8 @@ def _single_token_id(tokenizer: Any, surface: str) -> int:
 
 
 def _assert_calibration_anchors(rows: Sequence[Mapping[str, Any]]) -> None:
+    """Require every hard-control template anchor in calibration groups."""
+
     calibration_groups = {
         str(row["dependency_group"])
         for row in rows
@@ -1416,6 +1424,8 @@ def build_and_verify_dataset(
         )
 
     def encode(prompt: str) -> torch.Tensor:
+        """Encode one calibration prompt on the loaded model device."""
+
         return tokenizer.encode(
             prompt,
             add_special_tokens=False,

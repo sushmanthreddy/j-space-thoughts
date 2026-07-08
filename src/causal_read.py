@@ -37,7 +37,10 @@ class TokenizerLike(Protocol):
         *,
         add_special_tokens: bool,
         return_tensors: str,
-    ) -> torch.Tensor: ...
+    ) -> torch.Tensor:
+        """Encode one prompt using the exact tokenizer surface required here."""
+
+        ...
 
 
 class LensModelLike(Protocol):
@@ -190,6 +193,8 @@ def _residual_edit_hooks(
                 *,
                 _edit: TensorEdit = edit,
             ) -> Any:
+                """Apply the edit captured for this decoder block."""
+
                 del module, inputs
                 return _replace_hidden(output, _edit)
 
@@ -236,6 +241,8 @@ def token_difference_metric(
         raise ValueError("Behavior metric tokens must differ")
 
     def metric(logits: torch.Tensor) -> torch.Tensor:
+        """Evaluate the configured positive-minus-negative logit difference."""
+
         if logits.ndim != 3 or logits.shape[0] != 1:
             raise ValueError("Symmetric causal metrics require logits shaped [1,S,V]")
         return logits[0, -1, positive].float() - logits[0, -1, negative].float()
@@ -244,6 +251,8 @@ def token_difference_metric(
 
 
 def _position_index(sequence_length: int, position: int) -> int:
+    """Resolve one possibly-negative position against a sequence length."""
+
     index = int(position)
     if index < 0:
         index += sequence_length
@@ -281,6 +290,8 @@ def clean_state_and_logits(
     captured: dict[str, torch.Tensor] = {}
 
     def hook(module: nn.Module, inputs: tuple[Any, ...], output: Any) -> Any:
+        """Capture the selected decoder block's clean residual output."""
+
         del module, inputs
         captured["hidden"] = _hidden_from_output(output).detach()
         return output
@@ -323,6 +334,8 @@ def full_residual_interchange_edit(
         raise ValueError("donor_state must be one finite vector")
 
     def edit(hidden: torch.Tensor) -> torch.Tensor:
+        """Install the donor vector at the configured receiver position."""
+
         if hidden.ndim != 3 or hidden.shape[0] != 1 or hidden.shape[-1] != donor.numel():
             raise ValueError("Full interchange expects hidden [1,S,D] matching the donor")
         index = _position_index(hidden.shape[1], position)
@@ -506,6 +519,8 @@ def symmetric_interchange(
 
 
 def _model_device(hf_model: nn.Module) -> torch.device:
+    """Infer the live device from the model's first parameter."""
+
     try:
         return next(hf_model.parameters()).device
     except StopIteration as error:
@@ -518,6 +533,8 @@ def _encode_prompt(
     *,
     device: torch.device,
 ) -> torch.Tensor:
+    """Encode one causal prompt as a single tensor row on ``device``."""
+
     encoded = bundle.tokenizer.encode(
         str(prompt),
         add_special_tokens=False,
@@ -534,6 +551,8 @@ def _require_fields(
     *,
     row_name: str,
 ) -> None:
+    """Require a fixed field set in one externally supplied artifact row."""
+
     missing = [field for field in fields if field not in row]
     if missing:
         raise ValueError(f"{row_name} is missing required fields {missing}")
@@ -546,6 +565,8 @@ def _validate_expected_top_tokens(
     expected_b: int,
     label: str,
 ) -> None:
+    """Fail if clean model predictions drift from the verification manifest."""
+
     if measurement["clean_top_token_id_a"] != int(expected_a):
         raise RuntimeError(f"{label} clean A top-token verification drifted")
     if measurement["clean_top_token_id_b"] != int(expected_b):
@@ -717,6 +738,8 @@ def compute_base_causal_rows(
 
 
 def _base_engine_measurement(row: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Extract and validate one base engine's signed full-residual truth."""
+
     engine = row.get("engine")
     if not isinstance(engine, Mapping):
         raise ValueError(f"Base row {row.get('pair_id')!r} has no engine result")
@@ -859,6 +882,8 @@ def compute_hard_dashboard_causal_rows(
 
 
 def _finite_median(values: Sequence[float], *, name: str) -> float:
+    """Return a median after enforcing nonempty finite input."""
+
     if not values or not all(math.isfinite(value) for value in values):
         raise ValueError(f"{name} must be a nonempty sequence of finite values")
     return float(median(values))
@@ -868,6 +893,8 @@ def _task_measurement(
     row: Mapping[str, Any],
     task: Literal["engine", "dashboard"],
 ) -> Mapping[str, Any]:
+    """Extract and validate one engine or dashboard causal measurement."""
+
     container = row.get(task)
     if not isinstance(container, Mapping):
         raise ValueError(f"Base row {row.get('pair_id')!r} has no {task} result")

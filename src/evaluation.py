@@ -1,4 +1,4 @@
-"""Model-free statistics and validation helpers for the isolated v6 stress test.
+"""Model-free statistics and validation for final READ evaluation and stress tests.
 
 The functions in this module operate only on already-computed scalar values.
 They do not import model, activation-patching, causal-intervention, or READ
@@ -290,6 +290,74 @@ def _percentile_interval(
     tail = (1.0 - confidence) / 2.0
     low, high = np.quantile(valid, [tail, 1.0 - tail])
     return float(low), float(high), int(valid.size)
+
+
+def group_bootstrap_median(
+    records: Sequence[Mapping[str, Any]],
+    value_key: str,
+    *,
+    group_key: str = "dependency_group",
+    absolute: bool = False,
+    n_bootstrap: int = DEFAULT_BOOTSTRAP_DRAWS,
+    seed: int = DEFAULT_BOOTSTRAP_SEED,
+    confidence: float = DEFAULT_CONFIDENCE,
+) -> tuple[dict[str, Any], np.ndarray]:
+    """Estimate a median with a dependency-group percentile interval.
+
+    Complete groups are sampled with replacement, preserving every repeated
+    context within a concept dependency group.  ``absolute=True`` applies the
+    absolute value before both the observed median and every resampled median.
+    The summary is JSON serializable and the separate sample vector is retained
+    only for diagnostics.
+    """
+
+    n_bootstrap, seed, confidence = _validate_bootstrap_options(
+        n_draws=n_bootstrap,
+        seed=seed,
+        confidence=confidence,
+    )
+    columns, groups = _columns_from_records(
+        records,
+        finite_fields=(value_key,),
+        group_key=group_key,
+        schema_name=f"grouped_median_{value_key}",
+    )
+    values = columns[value_key]
+    if absolute:
+        values = np.abs(values)
+    group_names, blocks = _group_blocks(groups, expected_size=int(values.size))
+    estimate = float(np.median(values))
+    rng = np.random.default_rng(seed)
+    samples = np.empty(n_bootstrap, dtype=np.float64)
+    for draw in range(n_bootstrap):
+        indices = _bootstrap_indices(blocks, rng=rng)
+        samples[draw] = float(np.median(values[indices]))
+    ci_low, ci_high, valid_draws = _percentile_interval(
+        samples,
+        confidence=confidence,
+    )
+    return (
+        {
+            "statistic": "median_absolute" if absolute else "median",
+            "estimate": estimate,
+            "confidence": float(confidence),
+            "ci_low": ci_low,
+            "ci_high": ci_high,
+            "ci95_low": ci_low if confidence == 0.95 else None,
+            "ci95_high": ci_high if confidence == 0.95 else None,
+            "value_key": str(value_key),
+            "absolute": bool(absolute),
+            "group_key": str(group_key),
+            "n_rows": int(values.size),
+            "n_dependency_groups": int(len(group_names)),
+            "bootstrap_unit": "dependency_group",
+            "bootstrap_draws": int(n_bootstrap),
+            "valid_bootstrap_draws": int(valid_draws),
+            "undefined_bootstrap_draws": int(n_bootstrap - valid_draws),
+            "bootstrap_seed": int(seed),
+        },
+        samples,
+    )
 
 
 def group_bootstrap_spearman_arrays(
@@ -1036,6 +1104,34 @@ def evaluate_old_binary_detection(
     dashboard_rows = [row for row in rows if row["task"] == "dashboard"]
     if not engine_rows or not dashboard_rows:
         raise ValueError("task_rows must contain both engine and dashboard rows")
+    median_intervals = {
+        "engine_C": group_bootstrap_median(
+            engine_rows,
+            "C",
+            n_bootstrap=n_bootstrap,
+            seed=seed,
+        )[0],
+        "engine_abs_C": group_bootstrap_median(
+            engine_rows,
+            "C",
+            absolute=True,
+            n_bootstrap=n_bootstrap,
+            seed=seed,
+        )[0],
+        "dashboard_C": group_bootstrap_median(
+            dashboard_rows,
+            "C",
+            n_bootstrap=n_bootstrap,
+            seed=seed,
+        )[0],
+        "dashboard_abs_C": group_bootstrap_median(
+            dashboard_rows,
+            "C",
+            absolute=True,
+            n_bootstrap=n_bootstrap,
+            seed=seed,
+        )[0],
+    }
     sanity = {
         "n_pairs": int(len(engine_rows)),
         "engine_C_median": float(np.median([row["C"] for row in engine_rows])),
@@ -1057,6 +1153,7 @@ def evaluate_old_binary_detection(
                 for row in dashboard_rows
             )
         ),
+        "median_intervals": median_intervals,
     }
     return (
         {
@@ -1338,6 +1435,34 @@ def evaluate_hard_control(
         [row["hard_dashboard_C"] for row in causal_rows],
         name="hard_dashboard_C",
     )
+    median_intervals = {
+        "engine_C": group_bootstrap_median(
+            causal_rows,
+            "engine_C",
+            n_bootstrap=n_bootstrap,
+            seed=seed,
+        )[0],
+        "engine_abs_C": group_bootstrap_median(
+            causal_rows,
+            "engine_C",
+            absolute=True,
+            n_bootstrap=n_bootstrap,
+            seed=seed,
+        )[0],
+        "hard_dashboard_C": group_bootstrap_median(
+            causal_rows,
+            "hard_dashboard_C",
+            n_bootstrap=n_bootstrap,
+            seed=seed,
+        )[0],
+        "hard_dashboard_abs_C": group_bootstrap_median(
+            causal_rows,
+            "hard_dashboard_C",
+            absolute=True,
+            n_bootstrap=n_bootstrap,
+            seed=seed,
+        )[0],
+    }
     sanity = {
         "n_pairs": int(len(causal_rows)),
         "engine_C_median": float(np.median(engine_c)),
@@ -1352,6 +1477,7 @@ def evaluate_hard_control(
                 for row in causal_rows
             )
         ),
+        "median_intervals": median_intervals,
         "engine_large_gate": bool(np.median(np.abs(engine_c)) > 0.50),
         "hard_dashboard_near_zero_gate": bool(np.median(np.abs(hard_c)) < 0.10),
     }
@@ -1713,6 +1839,8 @@ def extract_provenance(
     decision = final_metrics["decision"]
 
     def auc_value(estimator: str, field: str) -> Any:
+        """Read one named field from the canonical estimator AUC record."""
+
         return auc[estimator][field]
 
     return {
@@ -1896,6 +2024,8 @@ def compare_provenance(
     compared = 0
 
     def walk(before: Any, after: Any, path: str) -> None:
+        """Recursively compare one scientific provenance subtree."""
+
         nonlocal compared
         if isinstance(before, Mapping):
             if not isinstance(after, Mapping):
