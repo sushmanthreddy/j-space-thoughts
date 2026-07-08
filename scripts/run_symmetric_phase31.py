@@ -38,7 +38,7 @@ if hashlib.sha256(DIRECTION_PATH.read_bytes()).hexdigest() != verification[
 ]["sha256"]:
     raise RuntimeError("Selected direction cache hash changed")
 selected_layer = int(verification["selection"]["layer"])
-position = int(verification["selection"]["position"])
+position_rule = str(verification["selection"]["position_rule"])
 verified_pairs = [
     row for row in verification["rows"] if row["verification_status"] == "VERIFIED"
 ]
@@ -62,6 +62,8 @@ def encode(prompt: str) -> torch.Tensor:
 
 rows = []
 for index, pair in enumerate(verified_pairs):
+    position_a = int(pair["context_position_a"])
+    position_b = int(pair["context_position_b"])
     vector_a = directions[int(pair["concept_a_token_id"])]
     vector_b = directions[int(pair["concept_b_token_id"])]
     engine_ids_a = encode(pair["engine_prompt_a"])
@@ -74,14 +76,14 @@ for index, pair in enumerate(verified_pairs):
         bundle.lens_model.layers,
         engine_ids_a,
         selected_layer,
-        position=position,
+        position=position_a,
     )
     engine_clean_b = clean_state_and_logits(
         bundle.hf_model,
         bundle.lens_model.layers,
         engine_ids_b,
         selected_layer,
-        position=position,
+        position=position_b,
     )
     engine_full = symmetric_interchange(
         bundle.hf_model,
@@ -94,7 +96,8 @@ for index, pair in enumerate(verified_pairs):
         pair_id=pair["pair_id"],
         task_kind="engine",
         layer=selected_layer,
-        position=position,
+        position_a=position_a,
+        position_b=position_b,
         variant="full_residual",
     )
     engine_subspace = symmetric_interchange(
@@ -108,7 +111,8 @@ for index, pair in enumerate(verified_pairs):
         pair_id=pair["pair_id"],
         task_kind="engine",
         layer=selected_layer,
-        position=position,
+        position_a=position_a,
+        position_b=position_b,
         variant="jlens_two_concept_subspace",
         direction_a=vector_a,
         direction_b=vector_b,
@@ -124,14 +128,14 @@ for index, pair in enumerate(verified_pairs):
         bundle.lens_model.layers,
         dashboard_ids_a,
         selected_layer,
-        position=position,
+        position=position_a,
     )
     dashboard_clean_b = clean_state_and_logits(
         bundle.hf_model,
         bundle.lens_model.layers,
         dashboard_ids_b,
         selected_layer,
-        position=position,
+        position=position_b,
     )
     dashboard_full = symmetric_interchange(
         bundle.hf_model,
@@ -144,7 +148,8 @@ for index, pair in enumerate(verified_pairs):
         pair_id=pair["pair_id"],
         task_kind="dashboard",
         layer=selected_layer,
-        position=position,
+        position_a=position_a,
+        position_b=position_b,
         normalization_t=engine_full["T"],
         variant="full_residual",
     )
@@ -159,7 +164,8 @@ for index, pair in enumerate(verified_pairs):
         pair_id=pair["pair_id"],
         task_kind="dashboard",
         layer=selected_layer,
-        position=position,
+        position_a=position_a,
+        position_b=position_b,
         normalization_t=engine_full["T"],
         variant="jlens_two_concept_subspace",
         direction_a=vector_a,
@@ -228,7 +234,7 @@ artifact = {
     "upstream_verification_sha256": hashlib.sha256(VERIFY_PATH.read_bytes()).hexdigest(),
     "model": verification["model"],
     "selected_layer": selected_layer,
-    "position": position,
+    "position_rule": position_rule,
     "primary_truth": "full_residual",
     "signed_unclipped": True,
     "sanity": sanity,

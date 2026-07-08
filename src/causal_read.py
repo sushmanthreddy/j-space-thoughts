@@ -183,7 +183,8 @@ def symmetric_interchange(
     variant: str = "full_residual",
     direction_a: torch.Tensor | None = None,
     direction_b: torch.Tensor | None = None,
-    position: int = -1,
+    position_a: int,
+    position_b: int,
     sharp_disagreement_threshold: float = 0.50,
 ) -> dict[str, Any]:
     """Measure signed two-direction interchange and return unclipped C."""
@@ -209,7 +210,8 @@ def symmetric_interchange(
             raise ValueError(f"Clean {side} record belongs to different input tokens")
         if int(record.get("layer", -1)) != layer:
             raise ValueError(f"Clean {side} record belongs to a different layer")
-        expected_position = _position_index(input_ids.shape[1], position)
+        requested_position = position_a if side == "A" else position_b
+        expected_position = _position_index(input_ids.shape[1], requested_position)
         if int(record.get("resolved_position", -1)) != expected_position:
             raise ValueError(f"Clean {side} record belongs to a different position")
         state = record.get("state")
@@ -238,16 +240,16 @@ def symmetric_interchange(
         raise ValueError(f"Symmetric normalization T must be finite and nonzero: {scale}")
 
     if variant == "full_residual":
-        edit_a_from_b = full_residual_interchange_edit(state_b, position=position)
-        edit_b_from_a = full_residual_interchange_edit(state_a, position=position)
+        edit_a_from_b = full_residual_interchange_edit(state_b, position=position_a)
+        edit_b_from_a = full_residual_interchange_edit(state_a, position=position_b)
     else:
         if direction_a is None or direction_b is None:
             raise ValueError("Subspace interchange requires both concept directions")
         edit_a_from_b = concept_subspace_interchange_edit(
-            state_b, direction_a, direction_b, position=position
+            state_b, direction_a, direction_b, position=position_a
         )
         edit_b_from_a = concept_subspace_interchange_edit(
-            state_a, direction_a, direction_b, position=position
+            state_a, direction_a, direction_b, position=position_b
         )
 
     logits_a_from_b = forward_logits(
@@ -288,7 +290,9 @@ def symmetric_interchange(
         "variant": variant,
         "eligible_as_primary_truth": variant == "full_residual",
         "layer": int(layer),
-        "position": int(position),
+        "position_rule": "last_token_of_shared_context_prefix",
+        "position_a": int(position_a),
+        "position_b": int(position_b),
         "metric_a": metric_a,
         "metric_b": metric_b,
         "metric_a_from_b": metric_a_from_b,

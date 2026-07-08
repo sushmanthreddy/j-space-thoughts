@@ -21,9 +21,10 @@ was computed.
   dependency groups with seed 1729 and place whole groups into calibration until
   at least 24 prompt pairs are present; those groups are calibration-only and
   excluded from the trust check. All remaining concept groups are held-out.
-- Position is fixed to the final prompt token. On calibration-only clean runs,
-  select one published J-Lens source layer from L13--L26 (L26 is the last source
-  layer in the pinned published lens) by maximum own-versus-matched-foil
+- Position is the final token of the byte-identical shared context prefix,
+  before the engine/dashboard completions diverge. On calibration-only clean
+  context runs, select one published J-Lens source layer from L13--L26 (L26 is
+  the last source layer in the pinned published lens) by maximum own-versus-foil
   discrimination rate, then median margin, then lower layer. Select the WRITTEN
   threshold by maximum balanced accuracy between calibration own-concept and
   matched-foil scores, restricted to thresholds with own-concept recall >=0.80;
@@ -59,6 +60,17 @@ was computed.
   and cannot rescue a failed primary.
 - Sharp directional disagreement is pre-flagged at
   `|R_A<-B - R_B<-A| > 0.50`. Negative and >1 responses are retained.
+
+### Pre-causal instrument correction
+
+No interchange, gradient READ, or trust-check value had been computed when this
+correction was recorded. The initial final-answer-token position made the
+task-matched dashboard WRITTEN check void even after direct-completion syntax
+restored clean answers (the arithmetic suffix had displaced the latent concept).
+The position rule was therefore corrected to the last shared-context token,
+where both tasks have exactly the same prefix state. The failed all-UNVERIFIED
+prompt-format attempt and the void-dashboard verification attempt are retained
+as hashed raw artifacts; no pair-specific result was used to choose the repair.
 
 ## New-run status
 

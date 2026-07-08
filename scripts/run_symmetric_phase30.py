@@ -34,10 +34,12 @@ ROOT = Path("/home/jovyan/j-space-thoughts")
 RAW_DIR = ROOT / "data/raw/v6"
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 METRICS_PATH = ROOT / "results/metrics.json"
+FAILED_FORMAT_PATH = RAW_DIR / "30_dataset_and_verification_attempt1_unverified.json"
+FAILED_DASHBOARD_PATH = RAW_DIR / "30_dataset_and_verification_attempt2_dashboard_void.json"
 MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
 SEED = 1729
 LAYERS = list(range(13, 27))
-POSITION = -1
+POSITION_RULE = "last_token_of_shared_context_prefix"
 
 
 def command_output(arguments: list[str]) -> str:
@@ -81,7 +83,7 @@ protocol = {
         "shuffle unordered concept dependency groups; take whole groups until >=24 pairs"
     ),
     "evaluation_folds": 5,
-    "position": POSITION,
+    "position_rule": POSITION_RULE,
     "layer_candidates": LAYERS,
     "layer_selection": (
         "calibration maximum own>foil rate, then median margin, then lower layer"
@@ -181,18 +183,16 @@ dashboard_records = batched_next_token_records(
     batch_size=32,
     top_k=5,
 )
-engine_matrices = residual_prompt_matrices(
+context_prompts = [
+    prompt
+    for pair in tokenized_pairs
+    for prompt in (pair["context_a"], pair["context_b"])
+]
+context_matrices = residual_prompt_matrices(
     bundle.lens_model,
-    engine_prompts,
+    context_prompts,
     LAYERS,
-    position=POSITION,
-    batch_size=32,
-)
-dashboard_matrices = residual_prompt_matrices(
-    bundle.lens_model,
-    dashboard_prompts,
-    LAYERS,
-    position=POSITION,
+    position=-1,
     batch_size=32,
 )
 concept_token_ids = sorted(
@@ -218,7 +218,7 @@ layer_selection_rows = []
 for layer in LAYERS:
     own_scores: list[float] = []
     foil_scores: list[float] = []
-    matrix = engine_matrices[layer]
+    matrix = context_matrices[layer]
     for index in calibration_indices:
         pair = tokenized_pairs[index]
         row_a, row_b = 2 * index, 2 * index + 1
@@ -258,7 +258,7 @@ selected_layer = int(selected_record["layer"])
 
 calibration_own: list[float] = []
 calibration_foil: list[float] = []
-matrix = engine_matrices[selected_layer]
+matrix = context_matrices[selected_layer]
 for index in calibration_indices:
     pair = tokenized_pairs[index]
     row_a, row_b = 2 * index, 2 * index + 1
@@ -306,20 +306,19 @@ threshold_record = max(
 written_threshold = float(threshold_record["threshold"])
 print(
     "frozen selection",
-    {"layer": selected_layer, "position": POSITION, **threshold_record},
+    {"layer": selected_layer, "position_rule": POSITION_RULE, **threshold_record},
 )
 
 verification_rows = []
-selected_engine = engine_matrices[selected_layer]
-selected_dashboard = dashboard_matrices[selected_layer]
+selected_context = context_matrices[selected_layer]
 for index, pair in enumerate(tokenized_pairs):
     row_a, row_b = 2 * index, 2 * index + 1
     vector_a = direction_bank[int(pair["concept_a_token_id"])][selected_layer]
     vector_b = direction_bank[int(pair["concept_b_token_id"])][selected_layer]
-    engine_z_a = float(torch.dot(selected_engine[row_a], vector_a))
-    engine_z_b = float(torch.dot(selected_engine[row_b], vector_b))
-    dashboard_z_a = float(torch.dot(selected_dashboard[row_a], vector_a))
-    dashboard_z_b = float(torch.dot(selected_dashboard[row_b], vector_b))
+    engine_z_a = float(torch.dot(selected_context[row_a], vector_a))
+    engine_z_b = float(torch.dot(selected_context[row_b], vector_b))
+    dashboard_z_a = engine_z_a
+    dashboard_z_b = engine_z_b
     engine_top1_a = int(engine_records[row_a]["rank"]) == 1
     engine_top1_b = int(engine_records[row_b]["rank"]) == 1
     dashboard_top1_a = int(dashboard_records[row_a]["rank"]) == 1
@@ -448,7 +447,7 @@ raw_artifact = {
     "tokenization_rejections": tokenization_rejections,
     "selection": {
         "layer": selected_layer,
-        "position": POSITION,
+        "position_rule": POSITION_RULE,
         "layer_candidates": layer_selection_rows,
         "written_threshold": written_threshold,
         "threshold_record": threshold_record,
@@ -462,6 +461,37 @@ raw_artifact = {
         "bytes": direction_path.stat().st_size,
         "sha256": direction_sha,
     },
+    "prompt_format_history": [
+        {
+            "status": "REJECTED_UNVERIFIED",
+            "reason": (
+                "Initial Question:/Answer: syntax made the model's immediate "
+                "next token a prose prefix rather than the declared single answer"
+            ),
+            "selection_policy": (
+                "Replacement direct-completion syntax chosen on calibration groups; "
+                "no causal or READ outcome existed"
+            ),
+            "artifact_path": str(FAILED_FORMAT_PATH),
+            "artifact_sha256": hashlib.sha256(FAILED_FORMAT_PATH.read_bytes()).hexdigest(),
+            "counts": json.loads(FAILED_FORMAT_PATH.read_text())["counts"],
+        },
+        {
+            "status": "REJECTED_DASHBOARD_CONTROL_VOID",
+            "reason": (
+                "Final-answer-token measurement displaced the latent concept in "
+                "both arithmetic controls despite restored clean answers"
+            ),
+            "selection_policy": (
+                "Semantic shared-context boundary fixed before any causal or READ outcome"
+            ),
+            "artifact_path": str(FAILED_DASHBOARD_PATH),
+            "artifact_sha256": hashlib.sha256(
+                FAILED_DASHBOARD_PATH.read_bytes()
+            ).hexdigest(),
+            "counts": json.loads(FAILED_DASHBOARD_PATH.read_text())["counts"],
+        },
+    ],
 }
 raw_path = RAW_DIR / "30_dataset_and_verification.json"
 save_json(raw_path, raw_artifact)
@@ -479,6 +509,7 @@ metrics["symmetric_causal_read_v6"] = {
         "counts": counts,
         "selection": raw_artifact["selection"],
         "logit_agreement": raw_artifact["logit_agreement"],
+        "prompt_format_history": raw_artifact["prompt_format_history"],
         "verification_rows": verification_rows,
         "raw_artifact": {
             "path": str(raw_path),
@@ -491,7 +522,7 @@ metrics["symmetric_causal_read_v6"] = {
 save_json(METRICS_PATH, metrics)
 print(json.dumps({"raw_sha256": raw_sha, "direction_sha256": direction_sha}, indent=2))
 
-del engine_matrices, dashboard_matrices, direction_bank, lens
+del context_matrices, direction_bank, lens
 release_model(bundle)
 gc.collect()
 torch.cuda.empty_cache()

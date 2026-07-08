@@ -95,6 +95,8 @@ else:
     localization_rows = []
     for index, causal_row in enumerate(selected):
         pair = verified_by_id[causal_row["pair_id"]]
+        position_a = int(pair["context_position_a"])
+        position_b = int(pair["context_position_b"])
         ids_a = encode(pair["engine_prompt_a"])
         ids_b = encode(pair["engine_prompt_b"])
         clean_a = clean_state_and_logits(
@@ -102,15 +104,19 @@ else:
             bundle.lens_model.layers,
             ids_a,
             selected_layer,
+            position=position_a,
         )
         clean_b = clean_state_and_logits(
             bundle.hf_model,
             bundle.lens_model.layers,
             ids_b,
             selected_layer,
+            position=position_b,
         )
         source_edits = {
-            selected_layer: full_residual_interchange_edit(clean_b["state"])
+            selected_layer: full_residual_interchange_edit(
+                clean_b["state"], position=position_a
+            )
         }
         metric_fn = token_difference_metric(
             pair["answer_a_token_id"], pair["answer_b_token_id"]

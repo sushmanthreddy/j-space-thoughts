@@ -391,15 +391,15 @@ SYMMETRIC_N_FOLDS = 5
 _SYMMETRIC_TASK_TEMPLATES = {
     "atomic-number-element-symbol": {
         "clue_prefix": "The chemical symbol of ",
-        "question": "What is that element's chemical symbol?",
+        "completion": "The chemical symbol is",
     },
     "us-city-state-capital": {
         "clue_prefix": "The capital of ",
-        "question": "What is that US state's capital?",
+        "completion": "The capital is",
     },
     "city-country-capital": {
         "clue_prefix": "The capital of ",
-        "question": "What is that country's capital?",
+        "completion": "The capital is",
     },
 }
 
@@ -443,9 +443,14 @@ def _symmetric_prompt(
     # so the caller cannot accidentally pair the clue with the wrong label.
     if not concept.strip():
         raise ValueError("Concept label must be non-empty")
-    context = f"Consider {description}."
-    question = "What is 2 + 2?" if dashboard else template["question"]
-    return context, f"Context: {context} Question: {question} Answer:"
+    context = f"Fact: {description}."
+    if dashboard:
+        # The trailing space makes the declared single token ``4`` the immediate
+        # continuation rather than Qwen's standalone whitespace token.
+        prompt = f"{context} 2 + 2 = "
+    else:
+        prompt = f"{context} {template['completion']}"
+    return context, prompt
 
 
 def build_symmetric_causal_candidates(
@@ -640,6 +645,25 @@ def tokenize_symmetric_candidate(tokenizer: Any, pair: dict) -> dict:
     dashboard_length_b = len(
         tokenizer.encode(pair["dashboard_prompt_b"], add_special_tokens=False)
     )
+    context_ids_a = tokenizer.encode(pair["context_a"], add_special_tokens=False)
+    context_ids_b = tokenizer.encode(pair["context_b"], add_special_tokens=False)
+    engine_ids_a = tokenizer.encode(pair["engine_prompt_a"], add_special_tokens=False)
+    engine_ids_b = tokenizer.encode(pair["engine_prompt_b"], add_special_tokens=False)
+    dashboard_ids_a = tokenizer.encode(
+        pair["dashboard_prompt_a"], add_special_tokens=False
+    )
+    dashboard_ids_b = tokenizer.encode(
+        pair["dashboard_prompt_b"], add_special_tokens=False
+    )
+    if not context_ids_a or not context_ids_b:
+        raise ValueError(f"Empty shared context for {pair['pair_id']}")
+    if (
+        engine_ids_a[: len(context_ids_a)] != context_ids_a
+        or dashboard_ids_a[: len(context_ids_a)] != context_ids_a
+        or engine_ids_b[: len(context_ids_b)] != context_ids_b
+        or dashboard_ids_b[: len(context_ids_b)] != context_ids_b
+    ):
+        raise ValueError(f"Shared context is not a stable token prefix for {pair['pair_id']}")
     return {
         **pair,
         "concept_a_token_id": concept_a_id,
@@ -660,4 +684,8 @@ def tokenize_symmetric_candidate(tokenizer: Any, pair: dict) -> dict:
         "engine_n_tokens_b": engine_length_b,
         "dashboard_n_tokens_a": dashboard_length_a,
         "dashboard_n_tokens_b": dashboard_length_b,
+        "context_n_tokens_a": len(context_ids_a),
+        "context_n_tokens_b": len(context_ids_b),
+        "context_position_a": len(context_ids_a) - 1,
+        "context_position_b": len(context_ids_b) - 1,
     }

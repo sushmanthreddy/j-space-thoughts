@@ -45,6 +45,24 @@ def _position_index(sequence_length: int, position: int) -> int:
     return index
 
 
+def _position_indices(
+    sequence_length: int,
+    batch_size: int,
+    position: int | Sequence[int],
+    *,
+    device: torch.device,
+) -> torch.Tensor:
+    if isinstance(position, int):
+        values = [_position_index(sequence_length, position)] * batch_size
+    else:
+        values = [
+            _position_index(sequence_length, int(value)) for value in position
+        ]
+        if len(values) != batch_size:
+            raise ValueError("Per-row activation positions must align with the batch")
+    return torch.tensor(values, device=device, dtype=torch.long)
+
+
 def _hidden_from_output(output: Any) -> torch.Tensor:
     if torch.is_tensor(output):
         return output
@@ -85,7 +103,7 @@ def clean_batch_states(
     metric_fn: BatchMetricFn,
     *,
     layer: int,
-    position: int = -1,
+    position: int | Sequence[int] = -1,
     attention_mask: torch.Tensor | None = None,
 ) -> dict[str, torch.Tensor]:
     """Capture clean selected-layer states, task metrics, and top tokens."""
@@ -118,12 +136,15 @@ def clean_batch_states(
     hidden = captured.get("hidden")
     if hidden is None:
         raise RuntimeError("Selected-layer clean activation was not captured")
-    index = _position_index(hidden.shape[1], position)
+    indices = _position_indices(
+        hidden.shape[1], hidden.shape[0], position, device=hidden.device
+    )
+    batch_indices = torch.arange(hidden.shape[0], device=hidden.device)
     metrics = metric_fn(logits)
     if metrics.shape != (input_ids.shape[0],) or not torch.isfinite(metrics).all():
         raise ValueError("Batch behavior metric must return one finite value per row")
     return {
-        "states": hidden[:, index].float(),
+        "states": hidden[batch_indices, indices].float(),
         "metrics": metrics.detach().float(),
         "top_token_ids": logits[:, -1].argmax(dim=-1).detach(),
         "activation_dtype": str(hidden.dtype),
@@ -138,7 +159,7 @@ def activation_metric_gradients(
     offsets: torch.Tensor,
     *,
     layer: int,
-    position: int = -1,
+    position: int | Sequence[int] = -1,
     attention_mask: torch.Tensor | None = None,
 ) -> dict[str, torch.Tensor]:
     """Differentiate batch metrics from a direction-defined residual offset."""
@@ -161,11 +182,16 @@ def activation_metric_gradients(
         hidden = _hidden_from_output(output)
         if hidden.shape[0] != offsets.shape[0] or hidden.shape[-1] != offsets.shape[1]:
             raise ValueError("Offset shape does not match selected-layer activation")
-        index = _position_index(hidden.shape[1], position)
-        captured["base_states"] = hidden[:, index].detach().float()
+        indices = _position_indices(
+            hidden.shape[1], hidden.shape[0], position, device=hidden.device
+        )
+        batch_indices = torch.arange(hidden.shape[0], device=hidden.device)
+        captured["base_states"] = hidden[batch_indices, indices].detach().float()
         leaf = hidden.detach().clone()
-        replacement = leaf[:, index].float() + offsets.to(hidden.device, torch.float32)
-        leaf[:, index] = replacement.to(hidden.dtype)
+        replacement = leaf[batch_indices, indices].float() + offsets.to(
+            hidden.device, torch.float32
+        )
+        leaf[batch_indices, indices] = replacement.to(hidden.dtype)
         leaf.requires_grad_(True)
         captured["leaf"] = leaf
         return _replace_output_hidden(output, leaf)
@@ -193,10 +219,13 @@ def activation_metric_gradients(
             )[0]
     finally:
         handle.remove()
-    index = _position_index(gradient.shape[1], position)
+    indices = _position_indices(
+        gradient.shape[1], gradient.shape[0], position, device=gradient.device
+    )
+    batch_indices = torch.arange(gradient.shape[0], device=gradient.device)
     return {
         "metrics": metrics.detach().float(),
-        "gradients": gradient[:, index].detach().float(),
+        "gradients": gradient[batch_indices, indices].detach().float(),
         "base_states": captured["base_states"],
     }
 
@@ -210,7 +239,7 @@ def symmetric_gradient_read(
     direction_b: torch.Tensor,
     *,
     layer: int,
-    position: int = -1,
+    position: int | Sequence[int] = -1,
     ig_steps: int = 16,
     attention_mask: torch.Tensor | None = None,
 ) -> dict[str, Any]:
@@ -307,8 +336,14 @@ def symmetric_gradient_read(
     return {
         "status": "OK",
         "layer": int(layer),
-        "position": int(position),
-        "position_contract": "left padded; every row has a real token at final column",
+        "positions": (
+            [int(position)] * input_ids.shape[0]
+            if isinstance(position, int)
+            else [int(value) for value in position]
+        ),
+        "position_contract": (
+            "per-row last shared-context token; left padding offsets resolved by caller"
+        ),
         "ig_steps": int(ig_steps),
         "ig_rule": "midpoint Riemann",
         "activation_dtype": clean["activation_dtype"],

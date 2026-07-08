@@ -67,7 +67,7 @@ direction_payload = torch.load(DIRECTION_PATH, map_location="cpu", weights_only=
 if direction_payload["protocol_sha256"] != verification["protocol_sha256"]:
     raise RuntimeError("Direction cache and verification protocol differ")
 selected_layer = int(verification["selection"]["layer"])
-position = int(verification["selection"]["position"])
+position_rule = str(verification["selection"]["position_rule"])
 verified_pairs = [
     row for row in verification["rows"] if row["verification_status"] == "VERIFIED"
 ]
@@ -81,15 +81,31 @@ directions = direction_payload["directions"]
 bundle.tokenizer.padding_side = "left"
 
 
-def encode_pair(prompt_a: str, prompt_b: str) -> tuple[torch.Tensor, torch.Tensor]:
+def encode_pair(
+    prompt_a: str,
+    prompt_b: str,
+    context_position_a: int,
+    context_position_b: int,
+) -> tuple[torch.Tensor, torch.Tensor, list[int]]:
     encoded = bundle.tokenizer(
         [prompt_a, prompt_b],
         add_special_tokens=False,
         padding=True,
         return_tensors="pt",
     )
+    if not bool(torch.all(encoded.attention_mask[:, -1] == 1)):
+        raise RuntimeError("Left-padded pair does not end in real tokens")
+    left_padding = encoded.input_ids.shape[1] - encoded.attention_mask.sum(dim=1)
+    positions = [
+        int(left_padding[0]) + int(context_position_a),
+        int(left_padding[1]) + int(context_position_b),
+    ]
     device = next(bundle.hf_model.parameters()).device
-    return encoded.input_ids.to(device), encoded.attention_mask.to(device)
+    return (
+        encoded.input_ids.to(device),
+        encoded.attention_mask.to(device),
+        positions,
+    )
 
 
 raw_rows = []
@@ -97,8 +113,11 @@ compact_rows = []
 for index, pair in enumerate(verified_pairs):
     vector_a = directions[int(pair["concept_a_token_id"])]
     vector_b = directions[int(pair["concept_b_token_id"])]
-    engine_ids, engine_mask = encode_pair(
-        pair["engine_prompt_a"], pair["engine_prompt_b"]
+    engine_ids, engine_mask, engine_positions = encode_pair(
+        pair["engine_prompt_a"],
+        pair["engine_prompt_b"],
+        pair["context_position_a"],
+        pair["context_position_b"],
     )
     engine_metric = batch_token_difference_metric(
         pair["answer_a_token_id"], pair["answer_b_token_id"]
@@ -111,12 +130,15 @@ for index, pair in enumerate(verified_pairs):
         vector_a,
         vector_b,
         layer=selected_layer,
-        position=position,
+        position=engine_positions,
         ig_steps=IG_STEPS,
         attention_mask=engine_mask,
     )
-    dashboard_ids, dashboard_mask = encode_pair(
-        pair["dashboard_prompt_a"], pair["dashboard_prompt_b"]
+    dashboard_ids, dashboard_mask, dashboard_positions = encode_pair(
+        pair["dashboard_prompt_a"],
+        pair["dashboard_prompt_b"],
+        pair["context_position_a"],
+        pair["context_position_b"],
     )
     dashboard_metric = batch_token_difference_metric(
         pair["dashboard_token_id"], pair["dashboard_distractor_token_id"]
@@ -129,7 +151,7 @@ for index, pair in enumerate(verified_pairs):
         vector_a,
         vector_b,
         layer=selected_layer,
-        position=position,
+        position=dashboard_positions,
         ig_steps=IG_STEPS,
         attention_mask=dashboard_mask,
     )
@@ -188,7 +210,7 @@ artifact = {
     "upstream_verification_sha256": hashlib.sha256(VERIFY_PATH.read_bytes()).hexdigest(),
     "model": verification["model"],
     "selected_layer": selected_layer,
-    "position": position,
+    "position_rule": position_rule,
     "ig_steps": IG_STEPS,
     "anti_circularity_audit": anti_circularity_audit,
     "rows": raw_rows,
