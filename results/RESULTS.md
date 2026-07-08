@@ -95,9 +95,54 @@ context and differ only in the continuation. This narrows the validated scope to
 explicitly written concepts; the rejected latent-context calibration artifact is
 retained and the limitation must be reported.
 
-## New-run status
+## Dataset verification
 
-PENDING — no symmetric-interchange or cheap-READ result has been computed yet.
+- Candidates: 118 distinct matched prompt pairs in
+  33 unordered concept groups.
+- Calibration-only: 25 prompt pairs; held-out
+  evaluation: 93.
+- **VERIFIED: 77**; **UNVERIFIED:
+  16**. The target was at least 60 verified
+  pairs. Failures remain logged and excluded; reason counts are
+  `{'DASHBOARD_A_CONCEPT_NOT_WRITTEN': 8, 'DASHBOARD_B_CONCEPT_NOT_WRITTEN': 9, 'ENGINE_A_CONCEPT_NOT_WRITTEN': 8, 'ENGINE_B_CONCEPT_NOT_WRITTEN': 9}`.
+- Frozen layer/position: L16 at the explicit concept token in the shared context;
+  WRITTEN threshold `2.482431`.
+
+## Engine-vs-dashboard causal sanity
+
+- Engine median signed C `0.9127`; median |C|
+  `0.9127`.
+- Dashboard median signed C `-0.0020`; median |C|
+  `0.0051`.
+- Sharp directional-disagreement flags: engine
+  0/77, dashboard
+  0/77.
+- Full-residual C is primary. The two-concept J-Lens-subspace variant is retained
+  per pair as a diagnostic and never substitutes for primary truth.
+
+![F1](figures/f1_symmetric_engine_dashboard_c.png)
+
+![F4](figures/f4_symmetric_direction_agreement.png)
+
+## Held-out trust check
+
+All AUCs are pooled out-of-fold on held-out concept groups. CIs resample entire
+unordered concept dependency groups and retain their repeated contexts and paired
+engine/dashboard tasks.
+
+| estimator | held-out AUC | group-bootstrap 95% CI | Spearman rho vs |C| | GO trigger |
+| --- | ---: | --- | ---: | --- |
+| READ_IG | 1.000 | [1.000, 1.000] | 0.707 | YES |
+| READ_local | 0.915 | [0.864, 0.967] | 0.621 | NO |
+| weight_norm_baseline | 0.500 | [0.500, 0.500] | -0.033 | NO |
+
+![F2](figures/f2_read_ig_vs_c.png)
+
+![F3](figures/f3_symmetric_auc_comparison.png)
+
+## DECISION
+
+**GO: READ_IG predicts causal use on held-out Qwen2.5-7B concepts (AUC=1.000, 95% CI [1.000, 1.000]).**
 
 ---
 

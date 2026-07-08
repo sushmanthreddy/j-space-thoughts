@@ -238,17 +238,16 @@ plt.close(fig)
 fig, ax = plt.subplots(figsize=(8.0, 5.8))
 labels = ["READ_IG", "READ_local", "weight-norm\n(broken baseline)"]
 centers = np.asarray([row["heldout_auc"] for row in auc_table])
-lower = centers - np.asarray([row["ci95_low"] for row in auc_table])
-upper = np.asarray([row["ci95_high"] for row in auc_table]) - centers
 ax.bar(labels, centers, color=["#1565C0", "#00897B", "#9E9E9E"])
-ax.errorbar(
-    np.arange(len(labels)),
-    centers,
-    yerr=np.vstack([lower, upper]),
-    fmt="none",
-    ecolor="black",
-    capsize=5,
-)
+for index, row in enumerate(auc_table):
+    ax.vlines(index, row["ci95_low"], row["ci95_high"], color="black", linewidth=1.5)
+    ax.hlines(
+        [row["ci95_low"], row["ci95_high"]],
+        index - 0.08,
+        index + 0.08,
+        color="black",
+        linewidth=1.5,
+    )
 ax.axhline(0.70, color="#B71C1C", linestyle="--", label="pre-registered AUC bar")
 ax.axhline(0.50, color="black", linestyle=":", label="chance")
 ax.set_ylim(0.0, 1.02)
@@ -315,7 +314,8 @@ new_status = f"""## Dataset verification
   {verification_counts['unverified_pairs']}**. The target was at least 60 verified
   pairs. Failures remain logged and excluded; reason counts are
   `{dict(sorted(failure_reasons.items()))}`.
-- Frozen layer/position: L{verification['selection']['layer']} at final prompt token;
+- Frozen layer/position: L{verification['selection']['layer']} at the explicit
+  concept token in the shared context;
   WRITTEN threshold `{verification['selection']['written_threshold']:.6f}`.
 
 ## Engine-vs-dashboard causal sanity
