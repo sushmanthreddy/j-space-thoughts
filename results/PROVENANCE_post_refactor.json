@@ -1,0 +1,116 @@
+{
+  "binary_detection": {
+    "READ_IG_hard_dashboard_auc": 1.0,
+    "READ_IG_hard_dashboard_ci95_high": 1.0,
+    "READ_IG_hard_dashboard_ci95_low": 0.9999999999999999,
+    "READ_IG_old_dashboard_auc": 1.0,
+    "READ_IG_old_dashboard_ci95_high": 1.0,
+    "READ_IG_old_dashboard_ci95_low": 0.9999999999999999,
+    "READ_local_old_dashboard_auc": 0.9148254343059539,
+    "READ_local_old_dashboard_ci95_high": 0.9671610906399328,
+    "READ_local_old_dashboard_ci95_low": 0.8636609781981285,
+    "capacity_baseline_auc": 0.4999999999999999,
+    "capacity_baseline_ci95_high": 0.5000000000000001,
+    "capacity_baseline_ci95_low": 0.49999999999999994
+  },
+  "branch": "cleanup-v1",
+  "causal_sanity": {
+    "engine_C_median": 0.9127144298688193,
+    "engine_abs_C_median": 0.9127144298688193,
+    "engine_sharp_directional_disagreements": 0,
+    "hard_dashboard_C_max": 0.017278617710583154,
+    "hard_dashboard_C_median": 0.0012345679012345677,
+    "hard_dashboard_C_min": -0.03321256038647343,
+    "hard_dashboard_abs_C_median": 0.00646551724137931,
+    "hard_dashboard_sharp_directional_disagreements": 0,
+    "n_pairs": 77,
+    "old_dashboard_C_median": -0.0020429009193054137,
+    "old_dashboard_abs_C_median": 0.005082592121982211,
+    "old_dashboard_sharp_directional_disagreements": 0
+  },
+  "comparison_policy": {
+    "absolute_tolerance": 0.001,
+    "relative_tolerance": 0.001,
+    "rule": "Every headline scalar must match within max(absolute_tolerance, relative_tolerance * abs(pre)). Counts, IDs, decisions, and booleans must match exactly."
+  },
+  "dataset": {
+    "calibration_pairs": 25,
+    "candidate_pairs": 118,
+    "evaluation_dependency_groups": 24,
+    "evaluation_pairs": 93,
+    "hard_dashboard_candidates": 77,
+    "hard_dashboard_unverified": 0,
+    "hard_dashboard_verified": 77,
+    "unverified_pairs": 16,
+    "verified_pairs": 77
+  },
+  "decision": {
+    "binary_detector": "SUPPORTED",
+    "graded_meter": "NOT_SUPPORTED",
+    "stress_test_label": "ARTIFACT (partial)"
+  },
+  "graded_use": {
+    "READ_IG_engine_only_ci95_high": 0.12601395213937172,
+    "READ_IG_engine_only_ci95_low": -0.4313773341424785,
+    "READ_IG_engine_only_rho": -0.17911036332088964,
+    "READ_IG_overall_spearman_rho": 0.7074119995631305,
+    "READ_local_engine_only_ci95_high": 0.1947310719351505,
+    "READ_local_engine_only_ci95_low": -0.45037004986356555,
+    "READ_local_engine_only_rho": -0.1592880803407119,
+    "READ_local_overall_spearman_rho": 0.6209925600858726,
+    "capacity_baseline_engine_only_ci95_high": 0.051357013586958405,
+    "capacity_baseline_engine_only_ci95_low": -0.4918333683677672,
+    "capacity_baseline_engine_only_rho": -0.25246771734788015,
+    "capacity_baseline_overall_spearman_rho": -0.03315587545372657,
+    "engine_abs_C_max": 1.0120253164556963,
+    "engine_abs_C_min": 0.7857889237199582,
+    "within_engine_auc_status": "NOT_RUN_NO_PREREGISTERED_OR_NATURAL_SPLIT"
+  },
+  "model": {
+    "bootstrap_draws": 10000,
+    "dtype": "torch.bfloat16",
+    "folds": 5,
+    "id": "Qwen/Qwen2.5-7B-Instruct",
+    "ig_steps": 16,
+    "position_rule": "explicit_concept_token_in_shared_context",
+    "revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+    "seed": 1729,
+    "source_layer": 16,
+    "written_threshold": 2.482430934906006
+  },
+  "preflight": {
+    "logit_agreement_max_mean_kl": 1.6602172081547906e-08,
+    "logit_agreement_prompts": 20,
+    "logit_agreement_status": "PASS",
+    "logit_agreement_threshold": 0.001
+  },
+  "read_distributions": {
+    "engine_hard_range_gap": 0.013937162235379219,
+    "engine_iqr": 0.11328360438346863,
+    "engine_max": 0.9927703738212585,
+    "engine_median": 0.21024686098098755,
+    "engine_min": 0.034969571977853775,
+    "engine_old_range_gap": 0.011559000238776207,
+    "hard_dashboard_iqr": 0.0067834104411304,
+    "hard_dashboard_max": 0.021032409742474556,
+    "hard_dashboard_median": 0.00631862273439765,
+    "hard_dashboard_min": 0.0016503171063959599,
+    "old_dashboard_iqr": 0.004459077026695013,
+    "old_dashboard_max": 0.023410571739077568,
+    "old_dashboard_median": 0.005552652291953564,
+    "old_dashboard_min": 0.0008810204453766346,
+    "old_hard_range_overlap_fraction": 0.8602964339328703
+  },
+  "schema_version": "cleanup-provenance-v1",
+  "snapshot": "post_refactor",
+  "source_commit": "c537a3f8bff401891c5ccf695cce7ffed74a0d52",
+  "source_hashes": {
+    "results/metrics.json": "8ff43f720635f466eabbf0374a88aab241a8ec58b5def049e568579ae3f9f691",
+    "src/causal_read.py": "f59726048a6b8d6befd540e525b95edaf49d650f7175065681da2fa87af58c20",
+    "src/cheap_read.py": "d47c6229609c2440e322ed9d729223c7e838fc75a55c52341a2682c6cd825d43",
+    "src/datasets.py": "d7d2cd1031e25afc74775bde261d438de4b19f660b89eb312e46084cdae8d325",
+    "src/evaluation.py": "33909f6ad464a6d2562ebaf2bac22ab0d029f67fcfdf1bdc17642689cd64792b",
+    "src/jlens_interface.py": "255b8848f861263747ee4522d98170e0815ced09882ae0976b72064ff0da9b76",
+    "src/plotting.py": "aa2e54739e39e2829bbff209cf1db00b515d8bc6ab11311331d5696adaabcfa5"
+  }
+}
