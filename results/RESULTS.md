@@ -18,11 +18,11 @@ The labels used for ROC AUC are the constructed relevant-engine versus idle-cont
 
 ## Causal sanity
 
-| class | N | median signed C | median |C| |
-| --- | ---: | ---: | ---: |
-| relevant engine | 77 | 0.912714 | 0.912714 |
-| original idle dashboard | 77 | -0.002043 | 0.005083 |
-| answer-type-matched idle dashboard | 77 | 0.001235 | 0.006466 |
+| class | N | median signed C (grouped 95% CI) | median |C| (grouped 95% CI) |
+| --- | ---: | --- | --- |
+| relevant engine | 77 | 0.912714 [0.896378, 0.929191] | 0.912714 [0.896378, 0.929191] |
+| original idle dashboard | 77 | -0.002043 [-0.003652, 0.002326] | 0.005083 [0.003587, 0.007752] |
+| answer-type-matched idle dashboard | 77 | 0.001235 [-0.001546, 0.005780] | 0.006466 [0.004013, 0.010064] |
 
 No class produced a preregistered sharp directional-disagreement flag. Full-residual C is signed and unclipped.
 

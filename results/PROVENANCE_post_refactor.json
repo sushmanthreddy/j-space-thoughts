@@ -103,13 +103,13 @@
   },
   "schema_version": "cleanup-provenance-v1",
   "snapshot": "post_refactor",
-  "source_commit": "c537a3f8bff401891c5ccf695cce7ffed74a0d52",
+  "source_commit": "8ce0364e1dbbc393c4885df821123aadcc3aeadf",
   "source_hashes": {
-    "results/metrics.json": "8ff43f720635f466eabbf0374a88aab241a8ec58b5def049e568579ae3f9f691",
-    "src/causal_read.py": "f59726048a6b8d6befd540e525b95edaf49d650f7175065681da2fa87af58c20",
-    "src/cheap_read.py": "d47c6229609c2440e322ed9d729223c7e838fc75a55c52341a2682c6cd825d43",
-    "src/datasets.py": "d7d2cd1031e25afc74775bde261d438de4b19f660b89eb312e46084cdae8d325",
-    "src/evaluation.py": "33909f6ad464a6d2562ebaf2bac22ab0d029f67fcfdf1bdc17642689cd64792b",
+    "results/metrics.json": "d9d8b7df41b73c999444b830f46d407cee2124606e201d8647a62305b188ad8a",
+    "src/causal_read.py": "17bec184ca65c792d297e24198aacb570f64daec3a7c960fe01d5e5555e1f120",
+    "src/cheap_read.py": "a4a0ab35c50ce73dd153414118e6150891a708acf5f64bf9c8cb31225bb0caab",
+    "src/datasets.py": "458f38f03c52e8e3926d99a0316a136996d9eb3ddabb24097945004635ca81bb",
+    "src/evaluation.py": "edba480ec41c535db3fa7b87adb8ff110076a4515312ce94991df559e50cf19f",
     "src/jlens_interface.py": "255b8848f861263747ee4522d98170e0815ced09882ae0976b72064ff0da9b76",
     "src/plotting.py": "aa2e54739e39e2829bbff209cf1db00b515d8bc6ab11311331d5696adaabcfa5"
   }
