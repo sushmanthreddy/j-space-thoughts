@@ -15,12 +15,15 @@ This section was written before any new matched-interchange or gradient outcome
 was computed.
 
 - Seed: 1729. Candidate data are the 118 deterministic one-to-one reciprocal
-  pairs in `data/specs/twohop_supplement.json`; every pair has two natural
-  prompts and two different single-token answers. The shuffled first 24 pairs
-  are calibration-only and are excluded from the trust check. All remaining
-  pairs are held-out evaluation concepts.
+  prompt pairs in `data/specs/twohop_supplement.json`; every prompt pair has two
+  natural contexts and two different single-token answers. Repeated contexts
+  sharing the same unordered concept pair form one dependency group. Shuffle
+  dependency groups with seed 1729 and place whole groups into calibration until
+  at least 24 prompt pairs are present; those groups are calibration-only and
+  excluded from the trust check. All remaining concept groups are held-out.
 - Position is fixed to the final prompt token. On calibration-only clean runs,
-  select one J-Lens source layer from L13--L27 by maximum own-versus-matched-foil
+  select one published J-Lens source layer from L13--L26 (L26 is the last source
+  layer in the pinned published lens) by maximum own-versus-matched-foil
   discrimination rate, then median margin, then lower layer. Select the WRITTEN
   threshold by maximum balanced accuracy between calibration own-concept and
   matched-foil scores, restricted to thresholds with own-concept recall >=0.80;
@@ -45,10 +48,11 @@ was computed.
   causal artifact or import/call interchange code. `READ_local` is the mean of
   `|(h^T v)(grad_h M . v)|` over the two clean directions. Static MLP gain is a
   labelled known-broken capacity baseline and cannot trigger GO.
-- Evaluation is pooled out-of-fold over five deterministic concept-pair folds;
-  no estimator, sign, layer, threshold, or score transformation is selected on
-  evaluation concepts. ROC bootstrap resamples concept pairs (keeping each
-  engine/dashboard pair together), 10,000 draws, seed 1729.
+- Evaluation is pooled out-of-fold over five deterministic folds assigned by
+  whole unordered concept dependency groups; no estimator, sign, layer,
+  threshold, or score transformation is selected on evaluation concepts. ROC
+  bootstrap resamples dependency groups, retaining every repeated context and
+  its engine/dashboard pair together, 10,000 draws, seed 1729.
 - **GO requires primary READ_IG held-out ROC AUC >= 0.70 and the pair-bootstrap
   95% CI lower bound > 0.50.** Otherwise the decision is NO-GO. `READ_local`,
   the capacity baseline, fold AUCs, and Spearman rho with `|C|` are secondary
