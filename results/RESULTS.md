@@ -11,8 +11,12 @@
 
 ## Pre-registered trust bar
 
-This section was written before any new matched-interchange or gradient outcome
-was computed.
+The numerical decision bar, estimator definitions, grouped inference, and
+anti-circularity rule in this section were written before any new
+matched-interchange or gradient outcome was computed. The position and layer
+rules were amended before final ground truth and before any cheap READ value;
+those instrument corrections are documented separately below and are not
+claimed as part of the original preregistration.
 
 - Seed: 1729. Candidate data are the 118 deterministic one-to-one reciprocal
   prompt pairs in `data/specs/twohop_supplement.json`; every prompt pair has two

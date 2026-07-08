@@ -107,7 +107,7 @@ report_order = [
 ]
 report_order_check = all(
     report_text.index(left) < report_text.index(right)
-    for left, right in zip(report_order, report_order[1:], strict=True)
+    for left, right in zip(report_order, report_order[1:])
 )
 
 notebook_checks = {}
@@ -138,9 +138,9 @@ audit = {
     "decision_present": decision_check,
     "results_section_order": report_order_check,
     "prior_notebooks_executed": notebook_checks,
-    "test_suite_run": False,
-    "ruff_run": False,
-    "pytest_run": False,
+    "test_suite_not_run": True,
+    "ruff_not_run": True,
+    "pytest_not_run": True,
 }
 
 

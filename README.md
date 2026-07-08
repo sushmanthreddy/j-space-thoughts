@@ -1,33 +1,76 @@
-# Written vs. Read — behavior-specific READ one-shot
+# Symmetric causal READ
 
 ## Result
 
-**V4 is complete with a READ-operationalization methods limitation and no hypothesis verdict.** The single permitted behavior-specific estimator failed G-READVAL: known-answer `rho=-0.077` (cluster-bootstrap 95% CI `[-0.518, 0.409]`, N=21) and narration separation `0/8`. P1–P3 were not run.
+**GO on Qwen2.5-7B-Instruct:** the gradient-only `READ_IG` estimator predicts
+held-out causal use with ROC AUC `1.000` and unordered-concept-group bootstrap
+95% CI `[1.000, 1.000]`. `READ_local` reaches AUC `0.915` (`[0.864, 0.967]`),
+while the known-broken static MLP capacity baseline remains at chance (`0.500`).
 
-The working evidence retained from prior repairs is real but narrower: canonical swaps pass 3/3, concept retrieval passes, firing controls work, and narration causal changes remain low 8/8. Masked capability rows were `NO_EDIT_OPPORTUNITY`, not active-edit preservation.
+The expensive truth is signed, symmetric, one-token full-residual interchange.
+Across 77 verified held-out prompt pairs, median engine `C=0.913` and median
+dashboard `|C|=0.0051`; no pair triggered the pre-registered directional-
+disagreement flag. The cheap estimator never imports interchange code or reads
+causal outputs.
 
-See [the full methods report](results/RESULTS.md), [notebook 10](notebooks/10_behavior_specific_read.ipynb), [notebook 11](notebooks/11_readval_gate.ipynb), and [notebook 14](notebooks/14_report.ipynb).
+This validates the estimator only for explicitly written concepts in
+`Qwen/Qwen2.5-7B-Instruct`. Earlier latent-context attempts did not yield a
+sound one-position causal instrument and are retained as rejected raw artifacts.
+GO-only localization found large signed component mediation, but top-8 circuits
+preserved only `0.239–0.365` of the effect under outside-component zero
+ablation, so no faithful compact-circuit claim is made.
 
-## One-shot method
+See [the full report](results/RESULTS.md) and
+[the machine-readable metrics](results/metrics.json).
 
-Exactly one new estimator was added in `src/read_scores.py`: exact path-patch thresholding followed by the inherited random-normalized weight READ restricted to `S_M`. The threshold was fixed at `|delta M|>=0.05`; no alpha or threshold sweep and no estimator fallback was used.
+## Separation of truth and predictor
 
-## Notebook chain
+- `src/causal_read.py` owns full-residual/subspace interchange C and GO-only
+  signed mediation.
+- `src/cheap_read.py` owns clean-forward gradients, 16-step midpoint IG,
+  local sensitivity, and the labelled static capacity baseline. It imports no
+  causal or patching module.
+- `src/data_gen.py` builds 118 distinct natural reciprocal prompt pairs,
+  leakage-safe concept-group splits, exact token contracts, and task-matched
+  engine/dashboard controls.
 
-1. `10_behavior_specific_read.ipynb` — builds exact path sets and global/restricted READ.
-2. `11_readval_gate.ipynb` — applies the hard known-answer and narration gates.
-3. `12_science_twohop.ipynb` and `13_science_ambiguity.ipynb` — executed model-free skips because G-READVAL failed.
-4. `14_report.ipynb` — Road-B methods-limitation paper.
+## Executed notebook chain
+
+1. `30_dataset_and_verification.ipynb` — preflight, 20-prompt KL gate,
+   calibration-only instrument selection, and VERIFIED/UNVERIFIED logging.
+2. `31_causal_ground_truth.ipynb` — signed symmetric full-residual C and the
+   diagnostic two-concept J-Lens subspace variant.
+3. `32_cheap_read.ipynb` — isolated `READ_IG`, `READ_local`, and capacity
+   baseline.
+4. `33_trust_check.ipynb` — five grouped held-out folds, 10,000-draw grouped
+   bootstrap, F1–F4, and the GO decision.
+5. `34_localization.ipynb` — GO-only signed mediation and faithfulness (F5).
+6. `35_report.ipynb` — artifact-by-artifact completion audit.
 
 ## Reproduction
 
 ```bash
 export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
-export HF_HOME="$HOME/.cache/huggingface"
-export HF_HUB_CACHE="$HOME/.cache/huggingface/hub"
-export HUGGINGFACE_HUB_CACHE="$HOME/.cache/huggingface/hub"
+export HF_HOME=/home/jovyan/.cache/huggingface
+export HF_HUB_CACHE=/home/jovyan/.cache/huggingface/hub
+export HUGGINGFACE_HUB_CACHE=/home/jovyan/.cache/huggingface/hub
 cd "$HOME/j-space-thoughts"
-.venv/bin/python -m pytest -q
+
+for notebook in \
+  notebooks/30_dataset_and_verification.ipynb \
+  notebooks/31_causal_ground_truth.ipynb \
+  notebooks/32_cheap_read.ipynb \
+  notebooks/33_trust_check.ipynb \
+  notebooks/34_localization.ipynb \
+  notebooks/35_report.ipynb
+do
+  .venv/bin/python -m jupyter nbconvert \
+    --to notebook --execute --inplace "$notebook" \
+    --ExecutePreprocessor.timeout=14400 \
+    --ExecutePreprocessor.kernel_name=j-space-thoughts
+done
 ```
 
-Model weights and full raw data remain ignored. Executed notebooks, compact metrics, figures, and the report are committed.
+The protocol explicitly forbids running the test suite, Ruff, or pytest for
+this experimental run. Model weights and full raw artifacts remain gitignored;
+executed notebooks, compact metrics, figures, and reports are committed.
