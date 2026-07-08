@@ -49,7 +49,7 @@ forbidden_found = sorted(
 )
 if forbidden_found:
     raise RuntimeError(f"Anti-circularity import audit failed: {forbidden_found}")
-driver_source = Path(__file__).read_text()
+driver_source = (ROOT / "scripts/run_symmetric_phase32.py").read_text()
 forbidden_artifact_reference = "31_" + "causal_" + "ground_truth"
 if forbidden_artifact_reference in driver_source:
     raise RuntimeError("Cheap READ driver references the causal ground-truth artifact")
