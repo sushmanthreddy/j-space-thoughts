@@ -1,0 +1,113 @@
+{
+  "schema_version": "cleanup-provenance-v1",
+  "snapshot": "pre_refactor",
+  "source_commit": "1a1c06b50e547ce7e2f3ad55947cf58ff9c4c337",
+  "branch": "cleanup-v1",
+  "comparison_policy": {
+    "absolute_tolerance": 0.001,
+    "relative_tolerance": 0.001,
+    "rule": "Every headline scalar must match within max(absolute_tolerance, relative_tolerance * abs(pre)). Counts, IDs, decisions, and booleans must match exactly."
+  },
+  "model": {
+    "id": "Qwen/Qwen2.5-7B-Instruct",
+    "revision": "a09a35458c702b33eeacc393d103063234e8bc28",
+    "dtype": "torch.bfloat16",
+    "seed": 1729,
+    "source_layer": 16,
+    "position_rule": "explicit_concept_token_in_shared_context",
+    "written_threshold": 2.482430934906006,
+    "ig_steps": 16,
+    "folds": 5,
+    "bootstrap_draws": 10000
+  },
+  "source_hashes": {
+    "results/metrics.json": "5a9218bdc18f7e12fc8685a96da545e2c213019361e7717b8467d17ec5ccd7f0",
+    "results/v6/metrics_v6.json": "2194235ead2d52a48f6ccc2c6119ca8603bfb0b032fec93825f64d21f53a61fd",
+    "src/causal_read.py": "97b2aeaeb45e0c868678dbe58337f4922c7a4d9d35a30d0806ac1eb679c8c2cc",
+    "src/cheap_read.py": "ed814fbaec4af1d6618a0f80e0f61fae7cc9597f0747766bcc166834047b32bb"
+  },
+  "preflight": {
+    "logit_agreement_prompts": 20,
+    "logit_agreement_max_mean_kl": 1.6602172081547906e-08,
+    "logit_agreement_threshold": 0.001,
+    "logit_agreement_status": "PASS"
+  },
+  "dataset": {
+    "candidate_pairs": 118,
+    "calibration_pairs": 25,
+    "evaluation_pairs": 93,
+    "verified_pairs": 77,
+    "unverified_pairs": 16,
+    "evaluation_dependency_groups": 24,
+    "hard_dashboard_candidates": 77,
+    "hard_dashboard_verified": 77,
+    "hard_dashboard_unverified": 0
+  },
+  "causal_sanity": {
+    "n_pairs": 77,
+    "engine_C_median": 0.9127144298688193,
+    "engine_abs_C_median": 0.9127144298688193,
+    "old_dashboard_C_median": -0.0020429009193054137,
+    "old_dashboard_abs_C_median": 0.005082592121982211,
+    "hard_dashboard_C_median": 0.0012345679012345677,
+    "hard_dashboard_abs_C_median": 0.00646551724137931,
+    "hard_dashboard_C_min": -0.03321256038647343,
+    "hard_dashboard_C_max": 0.017278617710583154,
+    "engine_sharp_directional_disagreements": 0,
+    "old_dashboard_sharp_directional_disagreements": 0,
+    "hard_dashboard_sharp_directional_disagreements": 0
+  },
+  "binary_detection": {
+    "READ_IG_old_dashboard_auc": 1.0,
+    "READ_IG_old_dashboard_ci95_low": 0.9999999999999999,
+    "READ_IG_old_dashboard_ci95_high": 1.0,
+    "READ_IG_hard_dashboard_auc": 1.0,
+    "READ_IG_hard_dashboard_ci95_low": 0.9999999999999999,
+    "READ_IG_hard_dashboard_ci95_high": 1.0,
+    "READ_local_old_dashboard_auc": 0.9148254343059539,
+    "READ_local_old_dashboard_ci95_low": 0.8636609781981285,
+    "READ_local_old_dashboard_ci95_high": 0.9671610906399328,
+    "capacity_baseline_auc": 0.4999999999999999,
+    "capacity_baseline_ci95_low": 0.49999999999999994,
+    "capacity_baseline_ci95_high": 0.5000000000000001
+  },
+  "graded_use": {
+    "READ_IG_overall_spearman_rho": 0.7074119995631305,
+    "READ_local_overall_spearman_rho": 0.6209925600858726,
+    "capacity_baseline_overall_spearman_rho": -0.03315587545372657,
+    "READ_IG_engine_only_rho": -0.17911036332088964,
+    "READ_IG_engine_only_ci95_low": -0.4313773341424785,
+    "READ_IG_engine_only_ci95_high": 0.12601395213937172,
+    "READ_local_engine_only_rho": -0.1592880803407119,
+    "READ_local_engine_only_ci95_low": -0.45037004986356555,
+    "READ_local_engine_only_ci95_high": 0.1947310719351505,
+    "capacity_baseline_engine_only_rho": -0.25246771734788015,
+    "capacity_baseline_engine_only_ci95_low": -0.4918333683677672,
+    "capacity_baseline_engine_only_ci95_high": 0.051357013586958405,
+    "engine_abs_C_min": 0.7857889237199582,
+    "engine_abs_C_max": 1.0120253164556963,
+    "within_engine_auc_status": "NOT_RUN_NO_PREREGISTERED_OR_NATURAL_SPLIT"
+  },
+  "read_distributions": {
+    "engine_min": 0.034969571977853775,
+    "engine_median": 0.21024686098098755,
+    "engine_max": 0.9927703738212585,
+    "engine_iqr": 0.11328360438346863,
+    "old_dashboard_min": 0.0008810204453766346,
+    "old_dashboard_median": 0.005552652291953564,
+    "old_dashboard_max": 0.023410571739077568,
+    "old_dashboard_iqr": 0.004459077026695013,
+    "hard_dashboard_min": 0.0016503171063959599,
+    "hard_dashboard_median": 0.00631862273439765,
+    "hard_dashboard_max": 0.021032409742474556,
+    "hard_dashboard_iqr": 0.0067834104411304,
+    "old_hard_range_overlap_fraction": 0.8602964339328703,
+    "engine_old_range_gap": 0.011559000238776207,
+    "engine_hard_range_gap": 0.013937162235379219
+  },
+  "decision": {
+    "binary_detector": "SUPPORTED",
+    "graded_meter": "NOT_SUPPORTED",
+    "stress_test_label": "ARTIFACT (partial)"
+  }
+}
