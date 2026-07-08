@@ -1,21 +1,18 @@
-# Runtime used for the executed notebooks. Install the reference J-Lens checkout
-# separately in editable mode as documented in README.md.
-torch>=2.5,<3
-transformers>=5.5,<6
-accelerate>=1.10,<2
-huggingface-hub>=0.34
-numpy>=2.2,<2.3
-scipy>=1.16.3,<1.17
-pandas>=2.2,<3
-scikit-learn>=1.5,<2
-statsmodels>=0.14,<1
-matplotlib>=3.9,<4
-seaborn>=0.13,<1
-plotly>=6,<7
-datasets>=4,<6
-jupyterlab>=4.3,<5
-nbconvert>=7.16,<8
-ipykernel>=6.29,<7
-pytest>=8,<10
-ruff>=0.9,<1
-tqdm>=4.66,<5
+# Exact versions used for the recorded cleanup-v1 rerun. The CUDA wheel index
+# supplies the recorded torch 2.5.1+cu124 build.
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.5.1+cu124
+transformers==5.13.0
+accelerate==1.14.0
+huggingface-hub==1.22.0
+numpy==2.2.6
+scipy==1.16.3
+scikit-learn==1.5.2
+matplotlib==3.10.0
+seaborn==0.13.2
+jupyterlab==4.3.5
+nbconvert==7.16.6
+ipykernel==6.29.5
+
+# Install Anthropic's jacobian-lens commit 581d398 separately in editable mode,
+# as shown in README.md. Its import package is `jlens`.

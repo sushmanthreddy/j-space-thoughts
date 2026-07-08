@@ -1,2 +1,1 @@
-"""WRITE/READ/CAUSAL mechanistic-interpretability experiments."""
-
+"""Final firewalled pipeline for causal validation of gradient-only READ."""

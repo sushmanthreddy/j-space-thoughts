@@ -1,32 +1,50 @@
-# Python and notebook caches
+# Python, tool, and notebook caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
 .ipynb_checkpoints/
 
 # Local environments and editor state
 .venv/
 venv/
 .env
+.env.*
 .DS_Store
+*.swp
+*.swo
 
 # Dependency checkouts belong in ~/deps, never in this results repository
 /jacobian-lens/
 /thought-branches/
 /TransformerLens/
 
-# Hugging Face/model caches and weights
-.cache/
-huggingface/
+# Hugging Face/model caches
+/.cache/
+/.huggingface/
+/huggingface/
+**/.cache/huggingface/
 **/huggingface/hub/
+
+# Model weights, fitted directions, and large tensor/checkpoint formats
 *.pt
 *.pth
 *.bin
 *.safetensors
 *.gguf
+*.ckpt
+*.onnx
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.zarr/
 pytorch_model*
-model-*.json
 
 # Generated data caches and fitted lenses. Small, authored specs are committed.
 /data/**
@@ -34,8 +52,16 @@ model-*.json
 !/data/specs/
 !/data/specs/**
 
-# Transient execution products (curated results/ remains tracked)
+# Transient or potentially >50 MB execution products. Curated root results,
+# paper figures, Markdown documentation, and final notebooks remain trackable.
 /artifacts/
+/checkpoints/
+/outputs/
+/runs/
+/scratch/
 /tmp/
+/wandb/
+*.log
+*.prof
+*.trace
 *.html
-
