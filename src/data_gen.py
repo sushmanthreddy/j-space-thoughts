@@ -391,15 +391,15 @@ SYMMETRIC_N_FOLDS = 5
 _SYMMETRIC_TASK_TEMPLATES = {
     "atomic-number-element-symbol": {
         "clue_prefix": "The chemical symbol of ",
-        "completion": "The chemical symbol is",
+        "completion": "Its chemical symbol is",
     },
     "us-city-state-capital": {
         "clue_prefix": "The capital of ",
-        "completion": "The capital is",
+        "completion": "Its capital is",
     },
     "city-country-capital": {
         "clue_prefix": "The capital of ",
-        "completion": "The capital is",
+        "completion": "Its capital is",
     },
 }
 
@@ -421,7 +421,7 @@ def _symmetric_prompt(
     source_prompt: str,
     *,
     dashboard: bool,
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     try:
         template = _SYMMETRIC_TASK_TEMPLATES[category]
     except KeyError as error:
@@ -437,20 +437,17 @@ def _symmetric_prompt(
             f"Source prompt does not match {category!r} clue prefix {prefix!r}: {clue!r}"
         )
     description = clue[len(prefix) :]
-    # Keep the concept latent, as in the original J-Lens prompt: the natural
-    # description evokes it, while the WRITTEN gate decides whether it is
-    # actually represented. ``concept`` remains an explicit function argument
-    # so the caller cannot accidentally pair the clue with the wrong label.
     if not concept.strip():
         raise ValueError("Concept label must be non-empty")
-    context = f"Fact: {description}."
+    concept_prefix = f"Fact: {description} is {concept}"
+    context = f"{concept_prefix}."
     if dashboard:
         # The trailing space makes the declared single token ``4`` the immediate
         # continuation rather than Qwen's standalone whitespace token.
         prompt = f"{context} 2 + 2 = "
     else:
         prompt = f"{context} {template['completion']}"
-    return context, prompt
+    return context, concept_prefix, prompt
 
 
 def build_symmetric_causal_candidates(
@@ -504,25 +501,25 @@ def build_symmetric_causal_candidates(
                 or str(row_b["answer"]).casefold() != str(answer_b).casefold()
             ):
                 raise ValueError(f"Inconsistent reciprocal group {dependency_group!r}")
-            context_a, engine_a = _symmetric_prompt(
+            context_a, concept_prefix_a, engine_a = _symmetric_prompt(
                 category,
                 str(concept_a),
                 str(row_a["prompt"]),
                 dashboard=False,
             )
-            context_b, engine_b = _symmetric_prompt(
+            context_b, concept_prefix_b, engine_b = _symmetric_prompt(
                 category,
                 str(concept_b),
                 str(row_b["prompt"]),
                 dashboard=False,
             )
-            dash_context_a, dashboard_a = _symmetric_prompt(
+            dash_context_a, dash_prefix_a, dashboard_a = _symmetric_prompt(
                 category,
                 str(concept_a),
                 str(row_a["prompt"]),
                 dashboard=True,
             )
-            dash_context_b, dashboard_b = _symmetric_prompt(
+            dash_context_b, dash_prefix_b, dashboard_b = _symmetric_prompt(
                 category,
                 str(concept_b),
                 str(row_b["prompt"]),
@@ -530,6 +527,8 @@ def build_symmetric_causal_candidates(
             )
             if context_a != dash_context_a or context_b != dash_context_b:
                 raise AssertionError("Engine/dashboard contexts must be byte-identical")
+            if concept_prefix_a != dash_prefix_a or concept_prefix_b != dash_prefix_b:
+                raise AssertionError("Engine/dashboard measurement prefixes must match")
             pairs.append(
                 {
                     "pair_id": f"symmetric-{len(pairs):03d}",
@@ -542,6 +541,8 @@ def build_symmetric_causal_candidates(
                     "answer_b": str(answer_b),
                     "context_a": context_a,
                     "context_b": context_b,
+                    "concept_prefix_a": concept_prefix_a,
+                    "concept_prefix_b": concept_prefix_b,
                     "engine_prompt_a": engine_a,
                     "engine_prompt_b": engine_b,
                     "dashboard_prompt_a": dashboard_a,
@@ -647,6 +648,12 @@ def tokenize_symmetric_candidate(tokenizer: Any, pair: dict) -> dict:
     )
     context_ids_a = tokenizer.encode(pair["context_a"], add_special_tokens=False)
     context_ids_b = tokenizer.encode(pair["context_b"], add_special_tokens=False)
+    concept_prefix_ids_a = tokenizer.encode(
+        pair["concept_prefix_a"], add_special_tokens=False
+    )
+    concept_prefix_ids_b = tokenizer.encode(
+        pair["concept_prefix_b"], add_special_tokens=False
+    )
     engine_ids_a = tokenizer.encode(pair["engine_prompt_a"], add_special_tokens=False)
     engine_ids_b = tokenizer.encode(pair["engine_prompt_b"], add_special_tokens=False)
     dashboard_ids_a = tokenizer.encode(
@@ -658,12 +665,26 @@ def tokenize_symmetric_candidate(tokenizer: Any, pair: dict) -> dict:
     if not context_ids_a or not context_ids_b:
         raise ValueError(f"Empty shared context for {pair['pair_id']}")
     if (
+        not concept_prefix_ids_a
+        or not concept_prefix_ids_b
+        or concept_prefix_ids_a[-1] != concept_a_id
+        or concept_prefix_ids_b[-1] != concept_b_id
+    ):
+        raise ValueError(f"Appended concept is not one stable final prefix token: {pair['pair_id']}")
+    if (
         engine_ids_a[: len(context_ids_a)] != context_ids_a
         or dashboard_ids_a[: len(context_ids_a)] != context_ids_a
         or engine_ids_b[: len(context_ids_b)] != context_ids_b
         or dashboard_ids_b[: len(context_ids_b)] != context_ids_b
     ):
         raise ValueError(f"Shared context is not a stable token prefix for {pair['pair_id']}")
+    if (
+        engine_ids_a[: len(concept_prefix_ids_a)] != concept_prefix_ids_a
+        or dashboard_ids_a[: len(concept_prefix_ids_a)] != concept_prefix_ids_a
+        or engine_ids_b[: len(concept_prefix_ids_b)] != concept_prefix_ids_b
+        or dashboard_ids_b[: len(concept_prefix_ids_b)] != concept_prefix_ids_b
+    ):
+        raise ValueError(f"Concept prefix is not stable in both tasks: {pair['pair_id']}")
     return {
         **pair,
         "concept_a_token_id": concept_a_id,
@@ -688,4 +709,6 @@ def tokenize_symmetric_candidate(tokenizer: Any, pair: dict) -> dict:
         "context_n_tokens_b": len(context_ids_b),
         "context_position_a": len(context_ids_a) - 1,
         "context_position_b": len(context_ids_b) - 1,
+        "intervention_position_a": len(concept_prefix_ids_a) - 1,
+        "intervention_position_b": len(concept_prefix_ids_b) - 1,
     }

@@ -95,8 +95,8 @@ else:
     localization_rows = []
     for index, causal_row in enumerate(selected):
         pair = verified_by_id[causal_row["pair_id"]]
-        position_a = int(pair["context_position_a"])
-        position_b = int(pair["context_position_b"])
+        position_a = int(pair["intervention_position_a"])
+        position_b = int(pair["intervention_position_b"])
         ids_a = encode(pair["engine_prompt_a"])
         ids_b = encode(pair["engine_prompt_b"])
         clean_a = clean_state_and_logits(

@@ -342,7 +342,7 @@ def symmetric_gradient_read(
             else [int(value) for value in position]
         ),
         "position_contract": (
-            "per-row last shared-context token; left padding offsets resolved by caller"
+            "per-row explicit concept token in shared context; left-padding offsets resolved"
         ),
         "ig_steps": int(ig_steps),
         "ig_rule": "midpoint Riemann",

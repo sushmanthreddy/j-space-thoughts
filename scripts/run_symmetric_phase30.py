@@ -43,10 +43,13 @@ CLEAN_MANIFEST_PATH = RAW_DIR / "30_clean_read_manifest.json"
 FAILED_FORMAT_PATH = RAW_DIR / "30_dataset_and_verification_attempt1_unverified.json"
 FAILED_DASHBOARD_PATH = RAW_DIR / "30_dataset_and_verification_attempt2_dashboard_void.json"
 FAILED_L26_CAUSAL_PATH = RAW_DIR / "31_causal_ground_truth_attempt1_l26_void.json"
+FAILED_LATENT_CONTEXT_PATH = (
+    RAW_DIR / "30_dataset_and_verification_attempt3_latent_context_weak.json"
+)
 MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
 SEED = 1729
 LAYERS = list(range(13, 27))
-POSITION_RULE = "last_token_of_shared_context_prefix"
+POSITION_RULE = "explicit_concept_token_in_shared_context"
 
 
 def command_output(arguments: list[str]) -> str:
@@ -194,7 +197,7 @@ dashboard_records = batched_next_token_records(
 context_prompts = [
     prompt
     for pair in tokenized_pairs
-    for prompt in (pair["context_a"], pair["context_b"])
+    for prompt in (pair["concept_prefix_a"], pair["concept_prefix_b"])
 ]
 context_matrices = residual_prompt_matrices(
     bundle.lens_model,
@@ -319,8 +322,8 @@ for layer_record in layer_selection_rows:
         )
         if not written or not clean_correct:
             continue
-        position_a = int(pair["context_position_a"])
-        position_b = int(pair["context_position_b"])
+        position_a = int(pair["intervention_position_a"])
+        position_b = int(pair["intervention_position_b"])
         engine_ids_a = encode(pair["engine_prompt_a"])
         engine_ids_b = encode(pair["engine_prompt_b"])
         engine_clean_a = clean_state_and_logits(
@@ -669,7 +672,22 @@ raw_artifact = {
                 FAILED_L26_CAUSAL_PATH.read_bytes()
             ).hexdigest(),
             "cheap_read_values_existed": False,
-        }
+        },
+        {
+            "status": "REJECTED_WEAK_LATENT_CONTEXT_INTERCHANGE",
+            "selected_layer": 22,
+            "calibration_engine_abs_C_median": 0.0076,
+            "calibration_dashboard_abs_C_median": 0.0039,
+            "reason": (
+                "No L13-L26 single latent-context-boundary state produced a "
+                "task-selective engine-large/dashboard-zero causal instrument"
+            ),
+            "artifact_path": str(FAILED_LATENT_CONTEXT_PATH),
+            "artifact_sha256": hashlib.sha256(
+                FAILED_LATENT_CONTEXT_PATH.read_bytes()
+            ).hexdigest(),
+            "cheap_read_values_existed": False,
+        },
     ],
 }
 raw_path = RAW_DIR / "30_dataset_and_verification.json"

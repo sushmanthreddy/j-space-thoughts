@@ -62,8 +62,8 @@ def encode(prompt: str) -> torch.Tensor:
 
 rows = []
 for index, pair in enumerate(verified_pairs):
-    position_a = int(pair["context_position_a"])
-    position_b = int(pair["context_position_b"])
+    position_a = int(pair["intervention_position_a"])
+    position_b = int(pair["intervention_position_b"])
     vector_a = directions[int(pair["concept_a_token_id"])]
     vector_b = directions[int(pair["concept_b_token_id"])]
     engine_ids_a = encode(pair["engine_prompt_a"])

@@ -119,8 +119,8 @@ for index, pair in enumerate(verified_pairs):
     engine_ids, engine_mask, engine_positions = encode_pair(
         pair["engine_prompt_a"],
         pair["engine_prompt_b"],
-        pair["context_position_a"],
-        pair["context_position_b"],
+        pair["intervention_position_a"],
+        pair["intervention_position_b"],
     )
     engine_metric = batch_token_difference_metric(
         pair["answer_a_token_id"], pair["answer_b_token_id"]
@@ -140,8 +140,8 @@ for index, pair in enumerate(verified_pairs):
     dashboard_ids, dashboard_mask, dashboard_positions = encode_pair(
         pair["dashboard_prompt_a"],
         pair["dashboard_prompt_b"],
-        pair["context_position_a"],
-        pair["context_position_b"],
+        pair["intervention_position_a"],
+        pair["intervention_position_b"],
     )
     dashboard_metric = batch_token_difference_metric(
         pair["dashboard_token_id"], pair["dashboard_distractor_token_id"]

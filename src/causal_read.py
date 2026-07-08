@@ -290,7 +290,7 @@ def symmetric_interchange(
         "variant": variant,
         "eligible_as_primary_truth": variant == "full_residual",
         "layer": int(layer),
-        "position_rule": "last_token_of_shared_context_prefix",
+        "position_rule": "explicit_concept_token_in_shared_context",
         "position_a": int(position_a),
         "position_b": int(position_b),
         "metric_a": metric_a,

@@ -21,10 +21,11 @@ was computed.
   dependency groups with seed 1729 and place whole groups into calibration until
   at least 24 prompt pairs are present; those groups are calibration-only and
   excluded from the trust check. All remaining concept groups are held-out.
-- Position is the final token of the byte-identical shared context prefix,
-  before the engine/dashboard completions diverge. On calibration-only clean
-  context runs, select one published J-Lens source layer from L13--L26 (L26 is
-  the last source layer in the pinned published lens) by maximum own-versus-foil
+- Position is the explicit single-token concept inside the byte-identical shared
+  natural fact context, before the engine/dashboard completions diverge. On
+  calibration-only clean context runs, select one published J-Lens source layer
+  from L13--L26 (L26 is the last source layer in the pinned published lens) by
+  maximum own-versus-foil
   discrimination rate, then median margin, then lower layer. Select the WRITTEN
   threshold by maximum balanced accuracy between calibration own-concept and
   matched-foil scores, restricted to thresholds with own-concept recall >=0.80;
@@ -83,6 +84,16 @@ median `|C|`, stronger WRITTEN discrimination, then the lower layer. The selecte
 layer and threshold are frozen before held-out C is recomputed. Cheap READ receives
 only a sanitized manifest containing the frozen selection, never calibration
 interchange outputs.
+
+The calibration layer grid then showed that no single latent context-boundary
+state was causally adequate (best calibration medians: engine `|C|=0.0076`,
+dashboard `|C|=0.0039`). Before final ground truth or any READ value, the shared
+context was therefore made an explicit natural fact (for example, “the country
+containing Salzburg is Austria”), and the intervention position fixed to the
+actual single concept token. Engine and arithmetic prompts retain that exact
+context and differ only in the continuation. This narrows the validated scope to
+explicitly written concepts; the rejected latent-context calibration artifact is
+retained and the limitation must be reported.
 
 ## New-run status
 
