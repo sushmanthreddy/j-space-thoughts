@@ -45,10 +45,10 @@ measured rejected distribution when none exists.
 | Separate reciprocal/interchange consistency | 0 | 0 | 0 | N/A; no such row-level gate exists |
 | WRITTEN visibility, both directions | 16 | 0 | 0 | Out of scope by audit rule |
 
-Among L16-visible held-out candidates, 77 enter the post-WRITTEN checks and all
-77 are retained. Therefore the retained causal range is the entire observed
-causal range for the audit-eligible visible population; no later verification
-gate can have compressed it.
+Among held-out candidates, 77 satisfy WRITTEN and all 77 also satisfy every
+other jointly evaluated verification condition. Therefore the retained causal
+range is the entire observed causal range for the audit-eligible visible
+population; no non-WRITTEN condition can have compressed it.
 
 ## Retained engines by relation family
 

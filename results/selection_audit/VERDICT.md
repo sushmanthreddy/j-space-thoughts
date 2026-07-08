@@ -1,6 +1,6 @@
 # Selection audit verdict
 
-## Finding A — observed post-WRITTEN gates are magnitude-neutral
+## Finding A — observed non-WRITTEN conditions are magnitude-neutral
 
 The audit supports **Finding A within the experiment's declared population of
 L16-visible concepts**. The clean-answer and downstream verification checks did
@@ -27,11 +27,12 @@ after verification and removes no rows.
 ## Plain-language explanation
 
 For concepts that meet the study's WRITTEN definition, the feared selection
-effect is not present: every held-out candidate that was visible at L16 made it
-into the final engine set. Therefore the later verification gates cannot be the
-reason the retained engines occupy a narrow, strong causal range. The binary
-result remains supported as originally scoped—distinguishing relevant from idle
-among explicit concepts that are detectably WRITTEN at the selected layer.
+effect is not present: every held-out candidate that was visible at L16 also
+passed all other jointly evaluated conditions and made it into the final engine
+set. Therefore the non-WRITTEN conditions cannot be the reason the retained
+engines occupy a narrow, strong causal range. The binary result remains
+supported as originally scoped—distinguishing relevant from idle among explicit
+concepts that are detectably WRITTEN at the selected layer.
 
 This finding does **not** show that the WRITTEN eligibility rule itself is
 causal-magnitude-neutral. The 16 excluded pairs were not-WRITTEN, and the audit

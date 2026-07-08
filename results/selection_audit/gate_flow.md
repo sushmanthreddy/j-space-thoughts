@@ -63,9 +63,9 @@ the same counts as the joint implementation.
 | Stage | Enter | Pass / leave | Removed at stage | Evidence |
 | --- | ---: | ---: | ---: | --- |
 | Reciprocal candidates constructed | 118 | 118 | 0 | 236 source items, 33 dependency groups |
-| Exact tokenization | 118 | 118 | 0 | `tokenization_rejections=[]` |
 | Assign calibration split | 118 | 25 calibration | 0 | whole-group allocation; not rejection |
 | Assign evaluation split | 118 | 93 evaluation | 0 | remaining whole groups |
+| Exact tokenization | 118 | 118 | 0 | `tokenization_rejections=[]` |
 | Evaluation: both engine targets clean top-1 | 93 | 93 | 0 | all `engine_top1_a/b=true` |
 | Evaluation: both own concepts WRITTEN at L16 | 93 | 77 | 16 | threshold `2.482430934906006` |
 | Evaluation: both dashboard targets clean top-1 | 77 | 77 | 0 | all 93 pass this check independently |
@@ -108,4 +108,5 @@ explicitly excludes concept-not-WRITTEN rows from evidence of magnitude bias.
 **PASS.** The pre-gate candidate pool and rejection reasons are preserved, so
 the audit does not need to reconstruct or fabricate a pool. Phase 2 therefore
 proceeds with an empty, evidence-backed rejected-C roster: zero visible
-candidates were removed by clean-answer or interchange-consistency gates.
+candidates were removed by the jointly evaluated clean-answer conditions, and
+no interchange-consistency rejection condition exists.
