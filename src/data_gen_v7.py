@@ -30,8 +30,8 @@ from src.datasets import (
 from src.jlens_interface import (
     MODEL_ID,
     MODEL_REVISION,
-    batched_next_token_records,
     concept_token_id,
+    decode_topk,
     enforce_kl_gate,
     hf_wrapper_logit_kl,
     jlens_direction_bank,
@@ -179,18 +179,24 @@ def _answer_contract(category: str) -> Mapping[str, str]:
 
 
 def _copy_dashboard_prompt(
-    engine_prompt: str,
+    shared_context: str,
+    concept: str,
     answer_surface: str,
     *,
     copy_object: str,
 ) -> str:
     """Turn one answer-requiring prompt into its answer-stated copy counterpart."""
 
-    if not engine_prompt or not engine_prompt.endswith(" is"):
-        raise ValueError(f"Engine prompt does not end with the frozen relation stem: {engine_prompt!r}")
+    if not shared_context or not shared_context.endswith("."):
+        raise ValueError(f"Shared context must be a complete fact: {shared_context!r}")
+    if not concept.strip():
+        raise ValueError("Dashboard concept must be nonempty")
     if not answer_surface.startswith(" "):
         raise ValueError("Contextual answer surface must start with one word-boundary space")
-    return f"{engine_prompt}{answer_surface}. Copy the {copy_object} exactly:"
+    return (
+        f"{shared_context} The {copy_object} of {concept} is{answer_surface}. "
+        f"Copy the {copy_object} exactly:"
+    )
 
 
 def _token_ids(tokenizer: Any, prompt: str) -> list[int]:
@@ -231,12 +237,14 @@ def build_matched_candidates_v7(tokenizer: Any) -> dict[str, Any]:
             raise ValueError(f"Collapsed concept/answer tokens for {pair['pair_id']}")
 
         dashboard_a = _copy_dashboard_prompt(
-            str(pair["engine_prompt_a"]),
+            str(pair["context_a"]),
+            str(pair["concept_a"]),
             answer_a_surface,
             copy_object=contract["copy_object"],
         )
         dashboard_b = _copy_dashboard_prompt(
-            str(pair["engine_prompt_b"]),
+            str(pair["context_b"]),
+            str(pair["concept_b"]),
             answer_b_surface,
             copy_object=contract["copy_object"],
         )
@@ -316,6 +324,8 @@ def build_matched_candidates_v7(tokenizer: Any) -> dict[str, Any]:
                 "same_answer_type": True,
                 "engine_answer_stated": False,
                 "dashboard_answer_stated_and_copyable": True,
+                "dashboard_copy_fact_self_contained": True,
+                "dashboard_repeats_concept_downstream": True,
                 "shared_prefix_token_identical_through_concept": True,
                 "source_row_a": str(pair["source_row_a"]),
                 "source_row_b": str(pair["source_row_b"]),
@@ -368,29 +378,22 @@ def capture_prompt_positions(
         raise ValueError("Prompts and positions must align and be nonempty")
     if hf_model.training:
         raise ValueError("WRITTEN capture requires eval mode")
+    if batch_size != 1:
+        raise ValueError("V7 WRITTEN verification is frozen to single-prompt forwards")
     if not 0 <= int(layer) < len(blocks):
         raise ValueError("WRITTEN layer is outside the model")
     device = next(hf_model.parameters()).device
-    tokenizer.padding_side = "right"
     chunks: list[torch.Tensor] = []
-    for start in range(0, len(prompts), batch_size):
-        prompt_batch = list(prompts[start : start + batch_size])
-        position_batch = [int(value) for value in positions[start : start + batch_size]]
-        encoded = tokenizer(
-            prompt_batch,
-            add_special_tokens=False,
-            padding=True,
-            return_tensors="pt",
-        )
-        input_ids = encoded.input_ids.to(device)
-        attention_mask = encoded.attention_mask.to(device)
-        for row_index, position in enumerate(position_batch):
-            real_length = int(attention_mask[row_index].sum().cpu())
-            if not 0 <= position < real_length:
-                raise IndexError(
-                    f"Position {position} outside prompt length {real_length}: "
-                    f"{prompt_batch[row_index]!r}"
-                )
+    for prompt, raw_position in zip(prompts, positions, strict=True):
+        position = int(raw_position)
+        input_ids = tokenizer.encode(
+            str(prompt), add_special_tokens=False, return_tensors="pt"
+        ).to(device)
+        if not 0 <= position < int(input_ids.shape[1]):
+            raise IndexError(
+                f"Position {position} outside prompt length {input_ids.shape[1]}: "
+                f"{prompt!r}"
+            )
         captured: dict[str, torch.Tensor] = {}
 
         def hook(_module: Any, _inputs: Any, output: Any) -> Any:
@@ -401,7 +404,6 @@ def capture_prompt_positions(
         try:
             hf_model(
                 input_ids=input_ids,
-                attention_mask=attention_mask,
                 use_cache=False,
             )
         finally:
@@ -409,10 +411,128 @@ def capture_prompt_positions(
         hidden = captured.get("hidden")
         if hidden is None:
             raise RuntimeError("Selected WRITTEN activation was not captured")
-        row_indices = torch.arange(len(prompt_batch), device=hidden.device)
-        position_tensor = torch.tensor(position_batch, device=hidden.device)
-        chunks.append(hidden[row_indices, position_tensor].detach().float().cpu())
+        chunks.append(hidden[0, position].detach().float().cpu().unsqueeze(0))
     return torch.cat(chunks, dim=0)
+
+
+@torch.no_grad()
+def single_prompt_next_token_records_v7(
+    hf_model: torch.nn.Module,
+    tokenizer: Any,
+    prompts: Sequence[str],
+    expected_token_ids: Sequence[int],
+    *,
+    top_k: int = 5,
+) -> list[dict[str, Any]]:
+    """Rank targets with the exact no-mask clean forward used by causal v7."""
+
+    if len(prompts) != len(expected_token_ids) or not prompts:
+        raise ValueError("Prompts and expected token IDs must align")
+    if hf_model.training:
+        raise ValueError("Clean target verification requires eval mode")
+    device = next(hf_model.parameters()).device
+    records: list[dict[str, Any]] = []
+    for index, (prompt, raw_expected_id) in enumerate(
+        zip(prompts, expected_token_ids, strict=True)
+    ):
+        expected_id = int(raw_expected_id)
+        input_ids = tokenizer.encode(
+            str(prompt), add_special_tokens=False, return_tensors="pt"
+        ).to(device)
+        logits = hf_model(input_ids=input_ids, use_cache=False).logits[0, -1].float()
+        rank = int((logits > logits[expected_id]).sum().cpu().item() + 1)
+        top_token_id = int(logits.argmax().cpu())
+        records.append(
+            {
+                "index": index,
+                "prompt": str(prompt),
+                "n_tokens": int(input_ids.shape[1]),
+                "expected_token_id": expected_id,
+                "expected_token": tokenizer.decode([expected_id]),
+                "expected_logit": float(logits[expected_id].cpu()),
+                "rank": rank,
+                "top_token_id": top_token_id,
+                "top1_correct": int(top_token_id == expected_id),
+                "top5_correct": int(rank <= 5),
+                "top_tokens": decode_topk(tokenizer, logits, top_k),
+                "forward_contract": (
+                    "single prompt; add_special_tokens=False; no attention mask"
+                ),
+            }
+        )
+    return records
+
+
+@torch.no_grad()
+def single_prompt_state_and_token_records_v7(
+    hf_model: torch.nn.Module,
+    blocks: Sequence[torch.nn.Module],
+    tokenizer: Any,
+    prompts: Sequence[str],
+    positions: Sequence[int],
+    expected_token_ids: Sequence[int],
+    *,
+    layer: int = SELECTED_LAYER,
+    top_k: int = 5,
+) -> tuple[torch.Tensor, list[dict[str, Any]]]:
+    """Capture state and rank from the same hooked forward used by causal v7."""
+
+    if not (
+        len(prompts) == len(positions) == len(expected_token_ids)
+    ) or not prompts:
+        raise ValueError("Prompts, positions, and expected IDs must align")
+    if hf_model.training or not 0 <= int(layer) < len(blocks):
+        raise ValueError("Exact clean verification requires eval mode and a valid layer")
+    device = next(hf_model.parameters()).device
+    states: list[torch.Tensor] = []
+    records: list[dict[str, Any]] = []
+    for index, (prompt, raw_position, raw_expected_id) in enumerate(
+        zip(prompts, positions, expected_token_ids, strict=True)
+    ):
+        position = int(raw_position)
+        expected_id = int(raw_expected_id)
+        input_ids = tokenizer.encode(
+            str(prompt), add_special_tokens=False, return_tensors="pt"
+        ).to(device)
+        if not 0 <= position < int(input_ids.shape[1]):
+            raise IndexError(f"Invalid explicit-concept position for {prompt!r}")
+        captured: dict[str, torch.Tensor] = {}
+
+        def hook(_module: Any, _inputs: Any, output: Any) -> Any:
+            captured["hidden"] = _hidden_from_output(output).detach()
+            return output
+
+        handle = blocks[int(layer)].register_forward_hook(hook)
+        try:
+            logits = hf_model(input_ids=input_ids, use_cache=False).logits[0, -1].float()
+        finally:
+            handle.remove()
+        hidden = captured.get("hidden")
+        if hidden is None:
+            raise RuntimeError("Exact clean verification did not capture its state")
+        states.append(hidden[0, position].detach().float().cpu())
+        rank = int((logits > logits[expected_id]).sum().cpu().item() + 1)
+        top_token_id = int(logits.argmax().cpu())
+        records.append(
+            {
+                "index": index,
+                "prompt": str(prompt),
+                "n_tokens": int(input_ids.shape[1]),
+                "expected_token_id": expected_id,
+                "expected_token": tokenizer.decode([expected_id]),
+                "expected_logit": float(logits[expected_id].cpu()),
+                "rank": rank,
+                "top_token_id": top_token_id,
+                "top1_correct": int(top_token_id == expected_id),
+                "top5_correct": int(rank <= 5),
+                "top_tokens": decode_topk(tokenizer, logits, top_k),
+                "forward_contract": (
+                    "single prompt; add_special_tokens=False; no attention mask; "
+                    "selected-layer capture hook; same state/logit forward"
+                ),
+            }
+        )
+    return torch.stack(states), records
 
 
 def _record_by_pair_side(
@@ -433,7 +553,7 @@ def verify_candidates_v7(
     *,
     layer: int = SELECTED_LAYER,
     written_threshold: float = FROZEN_WRITTEN_THRESHOLD,
-    batch_size: int = 16,
+    batch_size: int = 1,
 ) -> list[dict[str, Any]]:
     """Apply four top-1 checks and four independent WRITTEN checks per pair."""
 
@@ -466,40 +586,27 @@ def verify_candidates_v7(
             [int(row["concept_a_token_id"]), int(row["concept_b_token_id"])]
         )
 
-    bundle.tokenizer.padding_side = "right"
-    engine_records = batched_next_token_records(
-        bundle.hf_model,
-        bundle.tokenizer,
-        engine_prompts,
-        expected_ids,
-        batch_size=batch_size,
-        top_k=5,
-    )
-    dashboard_records = batched_next_token_records(
-        bundle.hf_model,
-        bundle.tokenizer,
-        dashboard_prompts,
-        expected_ids,
-        batch_size=batch_size,
-        top_k=5,
-    )
-    engine_states = capture_prompt_positions(
+    if batch_size != 1:
+        raise ValueError("V7 verification is frozen to batch_size=1")
+    engine_states, engine_records = single_prompt_state_and_token_records_v7(
         bundle.hf_model,
         bundle.lens_model.layers,
         bundle.tokenizer,
         engine_prompts,
         engine_positions,
+        expected_ids,
         layer=layer,
-        batch_size=batch_size,
+        top_k=5,
     )
-    dashboard_states = capture_prompt_positions(
+    dashboard_states, dashboard_records = single_prompt_state_and_token_records_v7(
         bundle.hf_model,
         bundle.lens_model.layers,
         bundle.tokenizer,
         dashboard_prompts,
         dashboard_positions,
+        expected_ids,
         layer=layer,
-        batch_size=batch_size,
+        top_k=5,
     )
     direction_matrix = torch.stack(
         [directions[int(token_id)].detach().float().cpu() for token_id in concept_ids]
@@ -517,10 +624,10 @@ def verify_candidates_v7(
         engine_a, engine_b = paired_engine[index]
         dashboard_a, dashboard_b = paired_dashboard[index]
         values = {
-            "engine_top1_a": int(engine_a["rank"]) == 1,
-            "engine_top1_b": int(engine_b["rank"]) == 1,
-            "dashboard_top1_a": int(dashboard_a["rank"]) == 1,
-            "dashboard_top1_b": int(dashboard_b["rank"]) == 1,
+            "engine_top1_a": bool(engine_a["top1_correct"]),
+            "engine_top1_b": bool(engine_b["top1_correct"]),
+            "dashboard_top1_a": bool(dashboard_a["top1_correct"]),
+            "dashboard_top1_b": bool(dashboard_b["top1_correct"]),
             "engine_written_a": float(engine_z[2 * index]) >= written_threshold,
             "engine_written_b": float(engine_z[2 * index + 1]) >= written_threshold,
             "dashboard_written_a": float(dashboard_z[2 * index]) >= written_threshold,
@@ -559,14 +666,10 @@ def verify_candidates_v7(
                 "engine_target_rank_b": int(engine_b["rank"]),
                 "dashboard_target_rank_a": int(dashboard_a["rank"]),
                 "dashboard_target_rank_b": int(dashboard_b["rank"]),
-                "engine_top_token_id_a": int(engine_a["top_tokens"][0]["token_id"]),
-                "engine_top_token_id_b": int(engine_b["top_tokens"][0]["token_id"]),
-                "dashboard_top_token_id_a": int(
-                    dashboard_a["top_tokens"][0]["token_id"]
-                ),
-                "dashboard_top_token_id_b": int(
-                    dashboard_b["top_tokens"][0]["token_id"]
-                ),
+                "engine_top_token_id_a": int(engine_a["top_token_id"]),
+                "engine_top_token_id_b": int(engine_b["top_token_id"]),
+                "dashboard_top_token_id_a": int(dashboard_a["top_token_id"]),
+                "dashboard_top_token_id_b": int(dashboard_b["top_token_id"]),
                 "four_written_checks_measured_independently": True,
             }
         )
@@ -623,9 +726,19 @@ def build_sanitized_manifest_v7(
         },
         "prompt_contract": {
             "engine": "answer absent; concept-to-answer relation must produce it",
-            "dashboard": "same relation answer is stated and must only be copied",
+            "dashboard": (
+                "self-contained downstream concept-answer fact states the answer, "
+                "which must only be copied"
+            ),
             "shared_prefix_through_explicit_concept_token": True,
+            "dashboard_repeats_concept_after_measured_site": True,
             "arithmetic_tasks_present": False,
+            "verification_forward": (
+                "single prompt; add_special_tokens=False; no attention mask; "
+                "selected-layer capture hook; state and logits from the same forward; "
+                "matches frozen causal clean forward"
+            ),
+            "top1_rule": "expected token must equal argmax; tied-max rank is insufficient",
         },
         "source": dict(source),
         "direction_provenance": dict(direction_provenance),

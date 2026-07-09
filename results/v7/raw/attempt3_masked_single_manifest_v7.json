@@ -5,8 +5,8 @@
     "calibration_pairs": 25,
     "candidates": 118,
     "evaluation_pairs": 93,
-    "unverified_pairs": 23,
-    "verified_pairs": 70
+    "unverified_pairs": 22,
+    "verified_pairs": 71
   },
   "direction_provenance": {
     "convention": "normalize(J_layer.T @ W_U[token]); fold_rms_gain=False",
@@ -110,9 +110,7 @@
     "dashboard": "self-contained downstream concept-answer fact states the answer, which must only be copied",
     "dashboard_repeats_concept_after_measured_site": true,
     "engine": "answer absent; concept-to-answer relation must produce it",
-    "shared_prefix_through_explicit_concept_token": true,
-    "top1_rule": "expected token must equal argmax; tied-max rank is insufficient",
-    "verification_forward": "single prompt; add_special_tokens=False; no attention mask; selected-layer capture hook; state and logits from the same forward; matches frozen causal clean forward"
+    "shared_prefix_through_explicit_concept_token": true
   },
   "rows": [
     {
@@ -1351,7 +1349,7 @@
       "dashboard_target_rank_a": 1,
       "dashboard_target_rank_b": 1,
       "dashboard_top1_a": true,
-      "dashboard_top1_b": false,
+      "dashboard_top1_b": true,
       "dashboard_top_token_id_a": 68790,
       "dashboard_top_token_id_b": 4710,
       "dashboard_written_a": true,
@@ -1387,11 +1385,9 @@
       "source_row_a": "world-melbourne-country-capital",
       "source_row_b": "world-izmir-country-capital",
       "split": "evaluation",
-      "verification_gate_pass": false,
-      "verification_reasons": [
-        "DASHBOARD_B_TARGET_NOT_TOP1"
-      ],
-      "verification_status": "UNVERIFIED",
+      "verification_gate_pass": true,
+      "verification_reasons": [],
+      "verification_status": "VERIFIED",
       "written_threshold": 2.482430934906006
     },
     {

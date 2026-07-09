@@ -1,12 +1,11 @@
 {
-  "causal_interchange_outputs_included": false,
   "counts": {
     "calibration_gate_pass": 23,
     "calibration_pairs": 25,
     "candidates": 118,
     "evaluation_pairs": 93,
-    "unverified_pairs": 23,
-    "verified_pairs": 70
+    "unverified_pairs": 22,
+    "verified_pairs": 71
   },
   "direction_provenance": {
     "convention": "normalize(J_layer.T @ W_U[token]); fold_rms_gain=False",
@@ -87,10 +86,171 @@
       96862
     ]
   },
-  "edited_metrics_included": false,
   "logit_agreement": {
     "max_mean_kl": 1.6602172081547906e-08,
     "n": 20,
+    "rows": [
+      {
+        "index": 0,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 5.774199962615967e-08,
+        "mean_kl": -1.6623697973727758e-08,
+        "n_tokens": 14,
+        "prompt": "Fact: The number of legs on the animal that spins webs is "
+      },
+      {
+        "index": 1,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 4.470348358154297e-08,
+        "mean_kl": -4.018561838847745e-08,
+        "n_tokens": 12,
+        "prompt": "Fact: The capital of the country where champagne originated is "
+      },
+      {
+        "index": 2,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 8.939992568457455e-08,
+        "mean_kl": -1.090643753087761e-08,
+        "n_tokens": 15,
+        "prompt": "Fact: The language spoken in the country where the Amazon River ends is "
+      },
+      {
+        "index": 3,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 3.052764441235922e-08,
+        "mean_kl": -2.4297781564541765e-08,
+        "n_tokens": 15,
+        "prompt": "Fact: The atomic number of the gas plants release during photosynthesis is "
+      },
+      {
+        "index": 4,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 4.452823176848142e-08,
+        "mean_kl": -1.609053335016597e-08,
+        "n_tokens": 14,
+        "prompt": "Fact: The currency used in the country shaped like a boot is "
+      },
+      {
+        "index": 5,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 1.5040859580039978e-07,
+        "mean_kl": -1.893525336527091e-09,
+        "n_tokens": 12,
+        "prompt": "A quiet river crossed the valley beneath a cloudless sky."
+      },
+      {
+        "index": 6,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 2.9802322387695312e-08,
+        "mean_kl": -1.1261611199131494e-08,
+        "n_tokens": 14,
+        "prompt": "Write one word that follows naturally: The musician tuned the violin and then"
+      },
+      {
+        "index": 7,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 7.448010563848584e-08,
+        "mean_kl": -6.363237492479357e-09,
+        "n_tokens": 13,
+        "prompt": "Question: Which planet is known for its prominent rings? Answer:"
+      },
+      {
+        "index": 8,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 3.748573362827301e-08,
+        "mean_kl": -5.41647295904113e-08,
+        "n_tokens": 10,
+        "prompt": "Translate to Spanish: The library closes at six."
+      },
+      {
+        "index": 9,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 7.069672847137554e-08,
+        "mean_kl": -2.0572008541108744e-09,
+        "n_tokens": 11,
+        "prompt": "The old bank stood beside the river after the storm."
+      },
+      {
+        "index": 10,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 1.5040859580039978e-07,
+        "mean_kl": 1.4103100909323985e-08,
+        "n_tokens": 13,
+        "prompt": "A botanist catalogued twelve unfamiliar flowers in the greenhouse."
+      },
+      {
+        "index": 11,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 5.3508074415731244e-08,
+        "mean_kl": 8.862402367526556e-09,
+        "n_tokens": 14,
+        "prompt": "If a dozen eggs are split equally among three baskets, each basket contains"
+      },
+      {
+        "index": 12,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 7.1359750108968e-08,
+        "mean_kl": 7.416025571416185e-09,
+        "n_tokens": 10,
+        "prompt": "The telescope on the mountain was calibrated before sunset."
+      },
+      {
+        "index": 13,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 2.6309862732887268e-08,
+        "mean_kl": -2.268232179858387e-08,
+        "n_tokens": 15,
+        "prompt": "Fact: The continent containing the city with the Eiffel Tower is "
+      },
+      {
+        "index": 14,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 2.444721758365631e-08,
+        "mean_kl": -2.7230557808621825e-09,
+        "n_tokens": 14,
+        "prompt": "Complete the sequence: red, orange, yellow, green, blue,"
+      },
+      {
+        "index": 15,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 1.4854595065116882e-07,
+        "mean_kl": 1.1600951310697383e-08,
+        "n_tokens": 11,
+        "prompt": "The committee postponed its decision until the evidence was reviewed."
+      },
+      {
+        "index": 16,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 7.448010563848584e-08,
+        "mean_kl": 1.6602172081547906e-08,
+        "n_tokens": 12,
+        "prompt": "Question: What metal is liquid near room temperature? Answer:"
+      },
+      {
+        "index": 17,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 5.995389074087143e-08,
+        "mean_kl": -8.535398166031882e-09,
+        "n_tokens": 16,
+        "prompt": "Fact: The author of Hamlet was born in the country whose capital is "
+      },
+      {
+        "index": 18,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 1.5040859580039978e-07,
+        "mean_kl": -9.794229427484424e-09,
+        "n_tokens": 15,
+        "prompt": "A chef sliced the bread, warmed the soup, and set the table."
+      },
+      {
+        "index": 19,
+        "max_abs_logit_error": 0.0,
+        "max_kl": 3.523575742292451e-08,
+        "mean_kl": -3.966999884141842e-08,
+        "n_tokens": 16,
+        "prompt": "The pronoun in 'Alex thanked Jordan because they helped' may be ambiguous."
+      }
+    ],
     "status": "PASS",
     "threshold": 0.001
   },
@@ -110,9 +270,7 @@
     "dashboard": "self-contained downstream concept-answer fact states the answer, which must only be copied",
     "dashboard_repeats_concept_after_measured_site": true,
     "engine": "answer absent; concept-to-answer relation must produce it",
-    "shared_prefix_through_explicit_concept_token": true,
-    "top1_rule": "expected token must equal argmax; tied-max rank is insufficient",
-    "verification_forward": "single prompt; add_special_tokens=False; no attention mask; selected-layer capture hook; state and logits from the same forward; matches frozen causal clean forward"
+    "shared_prefix_through_explicit_concept_token": true
   },
   "rows": [
     {
@@ -1351,7 +1509,7 @@
       "dashboard_target_rank_a": 1,
       "dashboard_target_rank_b": 1,
       "dashboard_top1_a": true,
-      "dashboard_top1_b": false,
+      "dashboard_top1_b": true,
       "dashboard_top_token_id_a": 68790,
       "dashboard_top_token_id_b": 4710,
       "dashboard_written_a": true,
@@ -1387,11 +1545,9 @@
       "source_row_a": "world-melbourne-country-capital",
       "source_row_b": "world-izmir-country-capital",
       "split": "evaluation",
-      "verification_gate_pass": false,
-      "verification_reasons": [
-        "DASHBOARD_B_TARGET_NOT_TOP1"
-      ],
-      "verification_status": "UNVERIFIED",
+      "verification_gate_pass": true,
+      "verification_reasons": [],
+      "verification_status": "VERIFIED",
       "written_threshold": 2.482430934906006
     },
     {
@@ -8918,7 +9074,13 @@
       "written_threshold": 2.482430934906006
     }
   ],
-  "schema_version": "matched-read-v7-sanitized-manifest-v1",
+  "sanitized_manifest": {
+    "causal_interchange_outputs_included": false,
+    "edited_metrics_included": false,
+    "path": "results/v7/matched_manifest_v7.json",
+    "sha256": "7b7b1f5925a1c7829bdfca1fa213036d8a8ed1aab65804c5cf1665f7e402d7a3"
+  },
+  "schema_version": "matched-read-v7-dataset-v1",
   "selection": {
     "layer": 16,
     "position_rule": "explicit_concept_token_in_shared_context",
@@ -8970,5 +9132,7 @@
     "path": "data/specs/twohop_supplement.json",
     "schema_version": "twohop-supplement-v1",
     "seed": 1729
-  }
+  },
+  "target_verified_pairs": 50,
+  "target_verified_pairs_met": true
 }
