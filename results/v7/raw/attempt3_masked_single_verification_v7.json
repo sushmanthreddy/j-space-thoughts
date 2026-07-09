@@ -1,0 +1,15 @@
+{
+  "schema_version": "matched-read-v7-rejected-verification-v1",
+  "status": "REJECTED_BEFORE_CAUSAL_COMPLETION",
+  "reason": "Even with batch_size=1, the clean verifier supplied an all-ones attention mask while the frozen causal clean forward supplied no mask. The near-tied symmetric-016 dashboard-B target was rank 1 only on the masked kernel path.",
+  "correction": "Use exact single-prompt, add_special_tokens=false, no-attention-mask forwards for both top-1 and WRITTEN verification, matching frozen causal semantics.",
+  "manifest": {
+    "path": "results/v7/raw/attempt3_masked_single_manifest_v7.json",
+    "sha256": "7b7b1f5925a1c7829bdfca1fa213036d8a8ed1aab65804c5cf1665f7e402d7a3"
+  },
+  "dataset": {
+    "path": "results/v7/raw/attempt3_masked_single_dataset_v7.json",
+    "sha256": "360a904b4023988f165550fc2d187067952c86737218baf8a96479aa05b6a97e"
+  },
+  "causal_artifact_emitted": false
+}

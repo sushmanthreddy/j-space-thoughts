@@ -1,0 +1,15 @@
+{
+  "schema_version": "matched-read-v7-rejected-verification-v1",
+  "status": "REJECTED_BEFORE_CAUSAL_COMPLETION",
+  "reason": "The initial corrected-template gate used batches of 16. A clean dashboard target for symmetric-016 changed top-1 status in the canonical single-prompt causal forward.",
+  "correction": "Rerun every clean top-1 and WRITTEN gate with batch_size=1 so dataset verification matches causal clean-forward semantics. Any additional failure remains UNVERIFIED.",
+  "manifest": {
+    "path": "results/v7/raw/attempt2_batched_matched_manifest_v7.json",
+    "sha256": "26719ffc48f78aca3bea855faa91b78a592674f87f50cc46ac4e775582938079"
+  },
+  "dataset": {
+    "path": "results/v7/raw/attempt2_batched_matched_dataset_v7.json",
+    "sha256": "01b27fcb4559dc67ee0291bf4bc0752df00005f7b474a00fa3a52aa31497188a"
+  },
+  "causal_artifact_emitted": false
+}

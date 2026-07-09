@@ -1,0 +1,33 @@
+{
+  "schema_version": "matched-causal-read-v7-rejected-design-v1",
+  "status": "REJECTED_BEFORE_READ",
+  "reason": "The pronoun-copy dashboard still made the first explicit concept token an antecedent and failed the full-state idle sanity gate.",
+  "dashboard_template": "<shared concept context>. Its <relation> is <answer>. Copy the <answer type> exactly:",
+  "metric": "logit(answer_A) - logit(answer_B)",
+  "metric_was_identical_in_both_conditions": true,
+  "n_pairs": 77,
+  "causal_sanity": {
+    "full_residual": {
+      "engine_abs_C_median": 0.9127144298688193,
+      "dashboard_abs_C_median": 0.2261904761904762
+    },
+    "jlens_two_concept_subspace": {
+      "engine_abs_C_median": 0.21484375,
+      "dashboard_abs_C_median": 0.04735376044568245
+    },
+    "full_state_engine_large": true,
+    "full_state_dashboard_near_zero": false,
+    "full_state_sanity_status": "FAIL"
+  },
+  "raw_artifact": {
+    "path": "results/v7/raw/attempt1_pronoun_causal_C_v7.json",
+    "sha256": "c659f11e762c2d62c9552337e133e07476950c9e5b74a8018c6589cada59b844"
+  },
+  "clean_artifacts": {
+    "manifest_path": "results/v7/raw/attempt1_pronoun_matched_manifest_v7.json",
+    "manifest_sha256": "536fac395f693949b4f6d3d2961c1deac07e02669011cc567b641eee92181f08",
+    "dataset_path": "results/v7/raw/attempt1_pronoun_matched_dataset_v7.json",
+    "dataset_sha256": "c12150eb70eb8d54b28e5f9177bd61ee7283239461a6adf64eef222fe1aeb054"
+  },
+  "correction": "Before any READ evaluation, replace the pronoun suffix with a self-contained explicit concept-answer fact followed by the copy instruction, then rerun v7_1 and v7_2."
+}
